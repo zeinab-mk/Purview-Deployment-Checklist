@@ -303,6 +303,21 @@ If ($AzureDataType -eq "AzureSQLMI") {
 If (($AzureDataType -eq "BlobStorage") -or ($AzureDataType -eq "ADLSGen2"))
 {
     Write-Output "Processing RBAC assignments for Azure Purview Account $PurviewAccount for $AzureDataType inside '$($TopLMG.Name)' Management Group" 
+    
+    $ControlPlaneRole = "Reader"
+    
+    #Check if Reader role is assigned at MG level
+    
+    $ExistingReaderRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $TopLMG.Id
+    
+    if (!$ExistingReaderRole) {
+        #Assign Reader role to Azure Purview at MG 
+        New-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $TopLMG.Id  
+        Write-Output "Reader role assigned to Azure Purview at '$($TopLMG.Name)'"
+     }else {
+        Write-Output "Reader role is already assigned to Azure Purview at '$($TopLMG.Name)'. No action is needed." 
+     }
+    
     $Role = "Storage Blob Data Reader"
 
     $DataSourceMGs = Get-AzManagementGroup 
