@@ -40,7 +40,9 @@ This posting is provided "AS IS" with no warranties, and confers no rights.
 
 .LINK
 
-1. https://docs.microsoft.com/en-us/sql/tools/sqlcmd-utility?view=sql-server-ver15 
+1. https://docs.microsoft.com/en-us/azure/purview/overview
+2. https://docs.microsoft.com/en-us/sql/tools/sqlcmd-utility?view=sql-server-ver15 
+
 
 
 .COMPONENT
@@ -287,8 +289,8 @@ If ($AzureDataType -eq "AzureSQLMI") {
 
                             }
 
-                            sqlcmd -S $AzureSqlMIFQDN -d $AzureSQLMIDB.Name -U $($AzSQLMIAADAdminPrompted.UserPrincipalName) -G -Q "CREATE USER [$PurviewAccount] FROM EXTERNAL PROVIDER; EXEC sp_addrolemember 'db_owner', [$PurviewAccount];"
-                            Write-Output  "Azure SQL DB: db_owner role is now assigned to $PurviewAccount in '$($AzureSQLMIDB.Name)' on Azure SQL Managed Instance '$($AzureSQLMIDBs.ManagedInstanceName)'"                       
+                            sqlcmd -S $AzureSqlMIFQDN -d $AzureSQLMIDB.Name -U $($AzSQLMIAADAdminPrompted.UserPrincipalName) -G -Q "CREATE USER [$PurviewAccount] FROM EXTERNAL PROVIDER; EXEC sp_addrolemember 'db_datareader', [$PurviewAccount];"
+                            Write-Output  "Azure SQL DB: db_datareader role is now assigned to $PurviewAccount in '$($AzureSQLMIDB.Name)' on Azure SQL Managed Instance '$($AzureSQLMIDBs.ManagedInstanceName)'"                       
   
                           }             
                       }
