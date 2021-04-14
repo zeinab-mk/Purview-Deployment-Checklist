@@ -287,9 +287,9 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
                                if (($null -ne $AzurePurviewMSISQLRole) -and ($AzurePurviewMSISQLRole -notlike "*Error*")) {
                                    $AzurePurviewMSISQLRole = $AzurePurviewMSISQLRole.trim()
                                    if (($AzurePurviewMSISQLRole.Contains("db_datareader")) -or ($AzurePurviewMSISQLRole.Contains("db_owner"))) {
-                                       Write-Output "Passed! db_datareader is granted to Azure Purview MSI" 
+                                       Write-Output "Passed! db_datareader is granted to Azure Purview Account: '$PurviewAccount'."
                                     }else {
-                                        Write-Host "Not Passed! db_datareader role not granted to Azure Purview Account MSI on Database: '$($AzureSQLDB.DatabaseName)' on Server:'$($AzureSqlServer.ServerName)'" -ForegroundColor red
+                                        Write-Host "Not Passed! db_datareader role not granted to Azure Purview Account: '$PurviewAccount' on Database: '$($AzureSQLDB.DatabaseName)' on Server:'$($AzureSqlServer.ServerName)'" -ForegroundColor red
                                  } 
 
                                 }
@@ -459,9 +459,9 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLMI")) {
                                 if (($null -ne $AzurePurviewMSISQLMIRole) -and ($AzurePurviewMSISQLMIRole -notlike "*Error*")) {
                                     $AzurePurviewMSISQLMIRole = $AzurePurviewMSISQLMIRole.trim()
                                     if (($AzurePurviewMSISQLMIRole.Contains("db_datareader")) -or ($AzurePurviewMSISQLMIRole.Contains("db_owner"))) {
-                                        Write-Output "Passed! db_datareader is granted to Azure Purview MSI" 
+                                        Write-Output "Passed! db_datareader is granted to Azure Purview Account: '$PurviewAccount'." 
                                      }else {
-                                         Write-Host "Not Passed! db_datareader role not granted to Azure Purview Account MSI on Database: '$($AzureSQLMIDB.Name)' on Server:'$($AzureSqlMI.ManagedInstanceName)'" -ForegroundColor red
+                                         Write-Host "Not Passed! db_datareader role not granted to Azure Purview Account: '$PurviewAccount' on Database: '$($AzureSQLMIDB.Name)' on Server:'$($AzureSqlMI.ManagedInstanceName)'" -ForegroundColor red
                                   } 
     
                                 }             
@@ -502,11 +502,12 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "BlobStorage") -or ($Azur
     #Check if Reader role is assigned at scope
     $ControlPlaneRole = "Reader"    
     if ($ExistingReaderRole.RoleDefinitionName -ne 'Reader') {
-        Write-Host "Not Passed! Azure RBAC 'Reader' role is not assigned to Azure Purview MSI!" -ForegroundColor red
+        Write-Host "Not Passed! Azure RBAC 'Reader' role is not assigned to Azure Purview Account: '$PurviewAccount'!" -ForegroundColor red
      }else {
-        Write-Output "Passed! Azure RBAC 'Reader' role is assigned to Azure Purview MSI." 
+        Write-Output "Passed! Azure RBAC 'Reader' role is assigned to Azure Purview Account: '$PurviewAccount'."
      }
     
+    Write-Host ""
     $Role = "Storage Blob Data Reader"
 
     $DataSourceMGs = Get-AzManagementGroup 
@@ -531,9 +532,9 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "BlobStorage") -or ($Azur
                         
                 if (!$ExistingRole) {
                    
-                   Write-Host "Not Passed! Storage Blob Data Reader Azure RBAC role is not assigned to $PurviewAccount!" -ForegroundColor Red
+                   Write-Host "Not Passed! 'Storage Blob Data Reader' Azure RBAC role is not assigned to Azure Purview Account: '$PurviewAccount'!" -ForegroundColor Red
                 }else {
-                    Write-Output "Passed! 'Storage Blob Data Reader' Azure RBAC role is assigned to $PurviewAccount." 
+                    Write-Output "Passed! 'Storage Blob Data Reader' Azure RBAC role is assigned to  Azure Purview Account: '$PurviewAccount'." 
                 }
                         
                 $StorageAccounts = Get-AzstorageAccount
@@ -598,11 +599,12 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "ADLSGen2"))
     $ControlPlaneRole = "Reader"    
     
     if ($ExistingReaderRole.RoleDefinitionName -ne 'Reader') {
-        Write-Host "Not Passed! Azure RBAC 'Reader' role is not assigned to Azure Purview MSI!" -ForegroundColor red
+        Write-Host "Not Passed! Azure RBAC 'Reader' role is not assigned to Azure Purview Account: '$PurviewAccount'!" -ForegroundColor red
      }else {
-        Write-Output "Passed! Azure RBAC 'Reader' role is assigned to Azure Purview MSI." 
+        Write-Output "Passed! Azure RBAC 'Reader' role is assigned to Azure Purview Account: '$PurviewAccount'." 
      }
     
+    Write-Host "" 
     $Role = "Storage Blob Data Reader"
 
     $DataSourceMGs = Get-AzManagementGroup 
