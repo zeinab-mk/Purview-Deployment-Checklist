@@ -2,7 +2,7 @@
 title: Azure Purview Deployment Checklist
 description: Azure Purview Deployment Checklist
 ms.author: Zeinab Mokhtarian Koorabbasloo
-ms.date: 04/13/2020
+ms.date: 04/16/2021
 ms.file: Readme.md
 ---
 | Update: 04/16/2020  |
