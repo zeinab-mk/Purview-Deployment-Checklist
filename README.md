@@ -21,14 +21,16 @@ These PowerShell scripts are aimed assist Azure Subscription owners and Azure Pu
 
 ## 1. Readiness Checklist
 
-[Azure Purview Readiness Checklist](https://github.com/zeinab-mk/Purview-Deployment-Checklist/blob/main/docs/Azure-Purview-Deployment-Readiness-Checklist.md) is a list of high-level steps to guide you to plan and deploy Azure Purview as your data governance solution. The guide is divided into four phases:
+[Azure Purview Readiness Checklist](https://github.com/zeinab-mk/Purview-Deployment-Checklist/blob/main/docs/Azure-Purview-Deployment-Readiness-Checklist.md) is a checklist of high-level steps to guide you to plan and deploy Azure Purview as your data governance solution. The guide is divided into four phases:
 
 1. **Readiness** – Learn the pre-requisite tools and approaches important to all adoption efforts.
 2. **Build Foundation** – Deploy Azure Purview Accounts to establish your unified data governance model.
 3. **Register Data Sources** – Setup first landing zone and onboard initial group of data sources.
 4. **Curate and consume data** – Enable a unified Data Governance solution for data consumers using Azure Purview.
 
-## 2. Azure Purview Automated Readiness Checklist
+<br>
+
+## 2. Azure Purview Automated Readiness Checklist (Powershell-based script)
 
 This is an [automated PowerShell script](https://github.com/zeinab-mk/Purview-Deployment-Checklist/blob/main/scripts/Azure-Purview-automated-readiness-checklist.ps1) that helps you to run a thorough validation about network and permissions in order to be able to register and scan data sources from your Azure environment in Azure Purview.
 
@@ -111,7 +113,9 @@ Role | Scope |
 
 This script requires Azure PowerShell [Az](https://docs.microsoft.com/en-us/powershell/azure/new-azureps-module-az?view=azps-5.8.0) Modules.
 
-## 3. Azure Purview Automated Readiness Deployment
+<br>
+
+## 3. Azure Purview Automated Readiness Deployment (Powershell-based script)
 
 This is an [automated PowerShell script](https://github.com/zeinab-mk/Purview-Deployment-Checklist/blob/main/scripts/Azure-Purview-MSI-Authentication.ps1) to help setup required  network and access permissions for Azure Purview account in order to be able to register and scan data sources from your Azure environment in Azure Purview.
 
