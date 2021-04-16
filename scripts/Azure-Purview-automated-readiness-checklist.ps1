@@ -98,13 +98,13 @@ Write-Host "$AzureDataType is selected as Data Source." -ForegroundColor Magenta
 Clear-AzContext
 
 #Login to Azure AD 
-Write-Host "Please sign in with your Azure AD administrator account"
+Write-Host "Please sign in with your Azure AD administrator account:"
 Connect-AzureAD
 
 #Authentication to Azure 
 
 Login-AzAccount
-Write-Host "Please sign in with your Azure administrator credentials"
+Write-Host "Please sign in with your Azure administrator credentials:"
 
 
 #List subscriptions
@@ -143,7 +143,7 @@ If ($null -ne $PurviewAccountMSI) {
 
 write-host "`n"
 Write-host "Please provide the required information! " -ForegroundColor blue
-Write-Host "Select the scope of your data sources to run the readiness check"
+Write-Host "Select the scope of your data sources to run the readiness check:"
 Write-Host "1: Management Group"
 Write-Host "2: Subscription"
 #Write-Host "3" Resource Group"
@@ -209,14 +209,18 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
         if ($DataSourceMG.Id.StartsWith($TopLMG.Id)) {
             foreach ($DataSourceChildMG in $DataSourceMG.Children | Where-Object { $_.Type -eq "/subscriptions" }) {
                 $DataSourceChildMGSubId = $DataSourceChildMG.Id -replace '/subscriptions/',''
+               
                 If ($Scope -eq 1) {
-                    Write-Host "Running readiness check on Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
-                    Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
-                }else {
-                    #Write-Host "Running readiness check on Subscription:'$($DataSub.Name)'" -ForegroundColor Magenta
-                    Select-AzSubscription -Context $DataSub | Out-Null
+                    Write-Host "Processing Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
                     
-                }
+                }else {
+                    #Write-Host "Processing Subscription:'$($DataSub.Name)'" -ForegroundColor Magenta
+                    $DataSourceChildMGSubId = $datasub.Subscription.Id
+                    $DataSourceChildMG.DisplayName = $DataSub.Subscription.Name
+                }            
+                
+                Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
+
                 $AzureSqlServers = Get-AzSqlServer
                 foreach ($AzureSqlServer in $AzureSqlServers) {
                    
@@ -228,7 +232,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
                     
                     If ($AzureSqlServer.PublicNetworkAccess -like 'False') {
                         #Public EndPoint disabled
-                        Write-Output "Awareness! Public Endpoint is not allowd on Azure SQL server: '$($AzureSqlServer.ServerName)',verifying Private endpoints..."
+                        Write-Output "Awareness! Public Endpoint is not allowd on Azure SQL server: '$($AzureSqlServer.ServerName)',verifying Private Endpoints..."
 
                     }else {
                         #Public EndPoint enabled
@@ -250,7 +254,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
                   #Verify Azure SQL Server Firewall settings
 
                   $AzureSqlServerFw = Get-AzSqlServerFirewallRule -ServerName $AzureSqlServer.ServerName -ResourceGroup $AzureSqlServer.ResourceGroupName "Rule*"
-                  if ($AzureSqlServerFw.FirewallRuleName -contains "AllowAllWindowsAzureIps")
+                  if (($AzureSqlServerFw.FirewallRuleName -contains "AllowAllWindowsAzureIps" ) -or $AzureSqlServerFw.FirewallRuleName -contains "AllowAllAzureIPs")
                   {
 
                     Write-Output "Passed! 'Allow Azure services and resources to access this server' is enabled on Azure SQL Server's Firewall: '$($AzureSqlServer.ServerName)'." 
@@ -301,12 +305,12 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
                   
                         } 
                     }
-                    Write-Host ""
-                    write-host "Readiness check completed for SQL Servers on '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
-                    write-host "-".PadRight(98, "-") -ForegroundColor Green
-                    write-host "`n"
+                  
                 }
-            
+                Write-Host ""
+                write-host "Readiness check completed for SQL Servers in '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
+                write-host "-".PadRight(98, "-") -ForegroundColor Green
+                write-host "`n"
             }
             if ($Scope -eq 2) {break}
         }
@@ -328,12 +332,15 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLMI")) {
             foreach ($DataSourceChildMG in $DataSourceMG.Children | Where-Object { $_.Type -eq "/subscriptions" }) {
                 $DataSourceChildMGSubId = $DataSourceChildMG.Id -replace '/subscriptions/',''
                 If ($Scope -eq 1) {
-                    Write-Host "Running readiness check on Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
-                    Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
+                    Write-Host "Processing Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
+                    
                 }else {
-                    #Write-Host "Running readiness check on Subscription:'$($DataSub.Name)'" -ForegroundColor Magenta
-                    Select-AzSubscription -Context $DataSub | Out-Null
-                }
+                    #Write-Host "Processing Subscription:'$($DataSub.Name)'" -ForegroundColor Magenta
+                    $DataSourceChildMGSubId = $datasub.Subscription.Id
+                    $DataSourceChildMG.DisplayName = $DataSub.Subscription.Name
+                }            
+                
+                Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
         
                 $AzureSqlMIs = Get-AzSqlInstance
                 foreach ($AzureSqlMI in $AzureSqlMIs) {
@@ -471,7 +478,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLMI")) {
                     }
                 }
             
-                write-host "Readiness check completed for Azure SQL Managed Instances on '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
+                write-host "Readiness check completed for Azure SQL Managed Instances in '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
                 write-host "-".PadRight(98, "-") -ForegroundColor Green
                 Write-host "`n"
             }    
@@ -519,14 +526,16 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "BlobStorage") -or ($Azur
                 $DataSourceChildMGSubId = $DataSourceChildMG.Id -replace '/subscriptions/',''
 
                 If ($Scope -eq 1) {
-                    Write-Host "Running readiness check on Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
-                    Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
-                }else {
-                    #Write-Host "Running readiness check on Subscription:'$($DataSub.Name)'" -ForegroundColor Magenta
-                    Select-AzSubscription -Context $DataSub | Out-Null
+                    Write-Host "Processing Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
                     
-                }
-                       
+                }else {
+                    #Write-Host "Processing Subscription:'$($DataSub.Name)'" -ForegroundColor Magenta
+                    $DataSourceChildMGSubId = $datasub.Subscription.Id
+                    $DataSourceChildMG.DisplayName = $DataSub.Subscription.Name
+                }            
+                
+                Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
+
                 #Verify whether RBAC is assigned
                 $ExistingRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $Role -Scope "/subscriptions/$DataSourceChildMGSubId"
                         
@@ -564,7 +573,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "BlobStorage") -or ($Azur
                     write-host ""
                 }
             
-            write-host "Readiness check completed for Storage Accounts on '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
+            write-host "Readiness check completed for Storage Accounts in '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
             write-host "-".PadRight(98, "-") -ForegroundColor Green
             Write-host "`n" 
             }
@@ -616,13 +625,15 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "ADLSGen2"))
                 $DataSourceChildMGSubId = $DataSourceChildMG.Id -replace '/subscriptions/',''
 
                 If ($Scope -eq 1) {
-                    Write-Host "Running readiness check on Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubI ..." -ForegroundColor Magenta
-                    Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
-                }else {
-                    #Write-Host "Running readiness check on Subscription:'$($DataSub.Name)'" -ForegroundColor Magenta
-                    Select-AzSubscription -Context $DataSub | Out-Null
+                    Write-Host "Processing Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
                     
-                }
+                }else {
+                    #Write-Host "Processing Subscription:'$($DataSub.Name)'" -ForegroundColor Magenta
+                    $DataSourceChildMGSubId = $datasub.Subscription.Id
+                    $DataSourceChildMG.DisplayName = $DataSub.Subscription.Name
+                }            
+                
+                Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
                        
                 #Verify whether RBAC is assigned
                 $ExistingRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $Role -Scope "/subscriptions/$DataSourceChildMGSubId"
@@ -661,7 +672,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "ADLSGen2"))
                     write-host ""
                 }
             
-            write-host "Readiness check completed for Azure Data Lake Storage Gen 2 on '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
+            write-host "Readiness check completed for Azure Data Lake Storage Gen 2 in '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
             write-host "-".PadRight(98, "-") -ForegroundColor Green
             Write-host "`n" 
             }
@@ -688,13 +699,16 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "ADLSGen1")) {
                 $DataSourceChildMGSubId = $DataSourceChildMG.Id -replace '/subscriptions/',''
 
                 If ($Scope -eq 1) {
-                    Write-Host "Running readiness check on Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
-                    Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
-                }else {
-                    #Write-Host "Running readiness check on Subscription:'$($DataSub.Name)'" -ForegroundColor Magenta
-                    Select-AzSubscription -Context $DataSub | Out-Null
+                    Write-Host "Processing Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
                     
-                }                         
+                }else {
+                    #Write-Host "Processing Subscription:'$($DataSub.Name)'" -ForegroundColor Magenta
+                    $DataSourceChildMGSubId = $datasub.Subscription.Id
+                    $DataSourceChildMG.DisplayName = $DataSub.Subscription.Name
+                }            
+                
+                Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
+                                   
                 Write-host ""
                 Write-Host "Running readiness check on Azure Data Lake Storage Gen 1 Account' Network Rules and Permissions..." -ForegroundColor Magenta
                 $AzureDataLakes = Get-AzDataLakeStoreAccount
@@ -704,7 +718,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "ADLSGen1")) {
                     # Verify if VNet Integration is enabled on Azure Data Lake Gen 1 Accounts in the subscription AND 'Allow all Azure services to access this Data Lake Storage Gen1 account' is not enabled
                     $AzureDataLake = Get-AzDataLakeStoreAccount -name $AzureDataLake.Name
                   
-                    If ($AzureDataLake.FirewallAllowAzureIps -eq 'Disabled') {
+                    If (($AzureDataLake.FirewallState -eq 'Enabled') -and ($AzureDataLake.FirewallAllowAzureIps -eq 'Disabled')) {
                         Write-Host "Not Passed! 'Allow all Azure services to access this Data Lake Storage Gen 1 account' is not enabled on Azure Data Lake Storage Gen 1 Account: '$($AzureDataLake.Name)'!" -ForegroundColor red
                         
                     }else {
@@ -712,20 +726,28 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "ADLSGen1")) {
                     }
                 
                     #Verify ACL
-                    $AzureDataLakeACLs = Get-AzDataLakeStoreItemAclEntry -Account $AzureDataLake.Name -Path /
-                    $missingacl = $null
-                    foreach ($AzureDataLakeACL in $AzureDataLakeACLs) {
-                        if (($AzureDataLakeACL.Permission -match 'x') -and ($AzureDataLakeACL.Permission -match 'r') -and ($AzureDataLakeACL.id -eq $PurviewAccountMSI)) {
-                            Write-host "Passed! 'Read' and 'Execute' permission is enabled for Azure Purview Account on Azure Data Lake Storage Gen 1 Account: '$($AzureDataLake.Name)'."
-                            $missingacl = 1  
-                            break
+                    $AzureDataLakeACLs = Get-AzDataLakeStoreItemAclEntry -Account $AzureDataLake.Name -Path / -ErrorAction SilentlyContinue -ErrorVariable error1
+                    if ($error1 -match "doesn't originate from an allowed virtual network, based on the configuration of the Azure Data Lake account") {
+                        #Missing network rules from client machine to ADLS Gen 1
+                        Write-host "Not Passed! Unable to access Azure Data Lake Storage Gen 1 Account: '$($AzureDataLake.Name)'! Update firewall rules to allow access from your IP Address!" -ForegroundColor red 
+                      
+                    }else {
+                        
+                        $missingacl = $null
+                        foreach ($AzureDataLakeACL in $AzureDataLakeACLs) {
+                            if (($AzureDataLakeACL.Permission -match 'x') -and ($AzureDataLakeACL.Permission -match 'r') -and ($AzureDataLakeACL.id -eq $PurviewAccountMSI)) {
+                                Write-host "Passed! 'Read' and 'Execute' permission is enabled for Azure Purview Account on Azure Data Lake Storage Gen 1 Account: '$($AzureDataLake.Name)'."
+                                $missingacl = 1  
+                                break
+                            }
                         }
-                    }
-                    if ($null -eq $missingacl) { Write-host "Not Passed! 'Read' and 'Execute' permission is not enabled for Azure Purview Account on Azure Data Lake Storage Gen 1 Account: '$($AzureDataLake.Name)'!" -ForegroundColor red }
-                    Write-host "`n"
+                    
+                        if ($null -eq $missingacl) { Write-host "Not Passed! 'Read' and 'Execute' permission is not enabled for Azure Purview Account on Azure Data Lake Storage Gen 1 Account: '$($AzureDataLake.Name)'!" -ForegroundColor red }
+                        Write-host "`n"
+                    }    
                 } 
                 
-                write-host "Readiness check completed for Azure Data Lake Storage Gen 1 Accounts on '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
+                write-host "Readiness check completed for Azure Data Lake Storage Gen 1 Accounts in '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
                 write-host "-".PadRight(98, "-") -ForegroundColor Green
                 Write-host "`n"      
             }          
