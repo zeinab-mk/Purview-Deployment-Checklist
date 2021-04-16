@@ -350,9 +350,19 @@ If ($AzureDataType -eq "AzureSQLMI") {
         if ($DataSourceMG.Id.StartsWith($TopLMG.Id)) {
             foreach ($DataSourceChildMG in $DataSourceMG.Children | Where-Object { $_.Type -eq "/subscriptions" }) {
                 $DataSourceChildMGSubId = $DataSourceChildMG.Id -replace '/subscriptions/',''
-                Write-Host "Processing Subscription Name:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
+
+
+                If ($Scope -eq 1) {
+                    Write-Host "Processing Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
+                    
+                }else {
+                    #Write-Host "Processing Subscription:'$($DataSub.Name)'." -ForegroundColor Magenta
+                    $DataSourceChildMGSubId = $datasub.Subscription.Id
+                    $DataSourceChildMG.DisplayName = $DataSub.Subscription.Name
+                }            
+                
                 Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
-            
+           
                 $AzureSqlMIs = Get-AzSqlInstance
                 foreach ($AzureSqlMI in $AzureSqlMIs) {
                       
