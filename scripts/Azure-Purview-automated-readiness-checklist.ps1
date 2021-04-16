@@ -489,11 +489,13 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLMI")) {
 
 # If Azure Storage Account (BlobStorage) is selected for Azure Data Source 
 
-If (($AzureDataType -eq "all") -or ($AzureDataType -eq "BlobStorage") -or ($AzureDataType -eq "ADLSGen2"))
+If (($AzureDataType -eq "all") -or ($AzureDataType -eq "BlobStorage"))
 {
     Write-Host ""
     Write-Host "Running readiness check for Azure Storage Accounts..." -ForegroundColor Magenta
     Write-host ""
+    
+    $ControlPlaneRole = "Reader"
 
     If ($Scope -eq 1) #MG
     {
@@ -507,7 +509,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "BlobStorage") -or ($Azur
         }
      
     #Check if Reader role is assigned at scope
-    $ControlPlaneRole = "Reader"    
+  
     if ($ExistingReaderRole.RoleDefinitionName -ne 'Reader') {
         Write-Host "Not Passed! Azure RBAC 'Reader' role is not assigned to Azure Purview Account: '$PurviewAccount'!" -ForegroundColor red
      }else {
