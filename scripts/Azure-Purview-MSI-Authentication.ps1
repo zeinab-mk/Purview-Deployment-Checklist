@@ -377,7 +377,7 @@ If ($AzureDataType -eq "AzureSQLMI") {
                             Write-Output "Public endpoint on your Azure SQL Managed Instance: '$($AzureSqlMI.ManagedInstanceName)'."
 
                         }else {
-                            Write-Host "Skipping '$($AzureSqlMI.ManagedInstanceName)'. Azure Purview will not be able to scan this Azure SQL Managed Instance!" ForegroundColor Red
+                            Write-Host "Skipping '$($AzureSqlMI.ManagedInstanceName)'. Azure Purview will not be able to scan this Azure SQL Managed Instance!" -ForegroundColor Red
                         } 
                     }
                     
@@ -426,7 +426,7 @@ If ($AzureDataType -eq "AzureSQLMI") {
                     }
                   
                     if ($nsgRuleAllowing -eq 0) {
-                        Write-Host "No NSG rules inside '$($NSG.Name)' configured to allow Azure Purview to reach Azure SQL Managed Instance '$($AzureSqlMI.ManagedInstanceName)' through port(s) $AzureSQLMIPorts!" -ForegroundColor Red 
+                        Write-Host "No NSG rules inside '$($NSG.Name)' configured to allow Azure Purview to reach Azure SQL Managed Instance '$($AzureSqlMI.ManagedInstanceName)' through port(s) $AzureSQLMIPorts!" 
                         
                         Write-host ""
                         Write-host "Please provide the required information! " -ForegroundColor blue
@@ -503,11 +503,12 @@ If ($AzureDataType -eq "AzureSQLMI") {
                         }
                     }
                     write-host ""
-                    $AzSQLMIAADAdminConfigured = Get-AzSqlInstanceActiveDirectoryAdministrator -InstanceName $AzureSqlMI.ManagedInstanceName -ResourceGroup $AzureSqlMI.ResourceGroupName
                     Write-host "Please provide the required information! " -ForegroundColor blue
                     $AzSQLMIAADAdminPrompted = Read-Host -Prompt "Enter your Azure SQL Administrator account that is Azure AD Integrated or enter a username to configure as Admin on Azure SQL Managed Instance: '$($AzureSqlMI.ManagedInstanceName)'"
                     $AzSQLMIAADAdminPrompted = Get-AzureADUser -ObjectId $AzSQLMIAADAdminPrompted
                     $AzSQLMIAADAdminPromptedGroups = Get-AzureADUserMembership -ObjectId $AzSQLMIAADAdminPrompted.ObjectId     
+                    
+                    $AzSQLMIAADAdminConfigured = Get-AzSqlInstanceActiveDirectoryAdministrator -InstanceName $AzureSqlMI.ManagedInstanceName -ResourceGroup $AzureSqlMI.ResourceGroupName
 
                     If ($null -ne $AzSQLMIAADAdminConfigured) {
                         #AAD Authentication is configured on Azure SQL Managed Instance
@@ -515,16 +516,42 @@ If ($AzureDataType -eq "AzureSQLMI") {
                         
                     }else {
                         # Azure AD Authentucation is not enabled on Azure SQL Managed Instance
-                        Write-Host "Azure AD Authentication is not enabled on Azure SQL Managed Instance: '$( $AzureSqlMI.ManagedInstanceName)'!"
+                        Write-Host "Azure AD Authentication is not enabled on Azure SQL Managed Instance: '$($AzureSqlMI.ManagedInstanceName)'!"
                         Write-host ""
                         Write-host "Please provide the required information! " -ForegroundColor blue
                         $Confirmation = Read-Host -Prompt "Press Y to enable Azure AD Authentication on Azure SQL Managed Instance: '$( $AzureSqlMI.ManagedInstanceName)'"
                         if ($Confirmation -eq "Y") 
                         {
-                            # Set Azure AD Authentication on Azure Managed Instance
-                            Set-AzSqlInstanceActiveDirectoryAdministrator -InstanceName $AzureSqlMI.ManagedInstanceName -ResourceGroup $AzureSqlMI.ResourceGroupName -DisplayName $AzSQLMIAADAdminPrompted.DisplayName -ObjectId $AzSQLMIAADAdminPrompted.ObjectId
-                            Write-Output "Azure AD Authentication is now enabled for user: '$($AzureSqlMI.ManagedInstanceName)' on Azure SQL Managed Instance: '$($AzureSqlMI.ManagedInstanceName)' "
-                            $AzSQLMIAADAdminConfigured = Get-AzSqlInstanceActiveDirectoryAdministrator -InstanceName $AzureSqlMI.ManagedInstanceName -ResourceGroup $AzureSqlMI.ResourceGroupName 
+                            
+                        #Assign Azure Active Directory read permission to a Service Principal representing the SQL Managed Instance.
+                        $AzureADReader = Get-AzureADDirectoryRole | Where-Object {$_.displayName -eq "Directory Readers"}
+                        $AzureADReaderMember = Get-AzureADServicePrincipal -SearchString $AzureSqlMI.ManagedInstanceName
+
+                        if ($null -eq $AzureADReader) {
+                            # Instantiate an instance of the role template
+                            $AzureADReaderTemplate = Get-AzureADDirectoryRoleTemplate | Where-Object {$_.displayName -eq "Directory Readers"}
+                            Enable-AzureADDirectoryRole -RoleTemplateId $AzureADReaderTemplate.ObjectId
+                            $AzureADReader = Get-AzureADDirectoryRole | Where-Object {$_.displayName -eq "Directory Readers"}
+                        }
+
+                        # Check if service principal is already member of readers role
+                       $AzureADReaderMembers = Get-AzureADDirectoryRoleMember -ObjectId $AzureADReader.ObjectId
+                       $selDirReader =$AzureADReaderMembers | where{$_.ObjectId -match $AzureADReaderMember.ObjectId}
+
+                        if ($selDirReader -eq $null) {
+                            # Add principal to AAD Readers role
+                            Write-Host "Adding service principal '$($AzureSqlMI.ManagedInstanceName)' to 'Directory Readers' role'..."
+                            Add-AzureADDirectoryRoleMember -ObjectId $AzureADReader.ObjectId -RefObjectId $AzureADReaderMember.ObjectId
+                            Write-Output "'$($AzureSqlMI.ManagedInstanceName)' service principal is now added to 'Directory Readers' role'."
+                            
+                        }else {
+                            Write-Output "Service principal '$($AzureSqlMI.ManagedInstanceName)' is already member of 'Directory Readers' role'."
+                        }
+
+                        # Set Azure AD Authentication on Azure Managed Instance
+                        Set-AzSqlInstanceActiveDirectoryAdministrator -InstanceName $AzureSqlMI.ManagedInstanceName -ResourceGroup $AzureSqlMI.ResourceGroupName -DisplayName $AzSQLMIAADAdminPrompted.UserPrincipalName -ObjectId $AzSQLMIAADAdminPrompted.ObjectId
+                        Write-Output "Azure AD Authentication is now enabled for user: '$($AzureSqlMI.ManagedInstanceName)' on Azure SQL Managed Instance: '$($AzureSqlMI.ManagedInstanceName)' "
+                        $AzSQLMIAADAdminConfigured = Get-AzSqlInstanceActiveDirectoryAdministrator -InstanceName $AzureSqlMI.ManagedInstanceName -ResourceGroup $AzureSqlMI.ResourceGroupName 
 
                         }else {
                             Write-Host "Skipping '$($AzureSqlMI.ManagedInstanceName)'. Azure Purview will not be able to scan this Azure SQL Managed Instance!" -ForegroundColor Red
@@ -536,17 +563,17 @@ If ($AzureDataType -eq "AzureSQLMI") {
                         if (($AzureSQLMIDB.Name -ne "master") -or ($AzureSQLMIDB.Name -ne "model") -or ($AzureSQLMIDB.Name -ne "msdb") -or ($AzureSQLMIDB.Name -ne "tempdb")) 
                         {
                             $AzureSqlMIFQDN = $AzureSqlMI.ManagedInstanceName + ".public." + $AzureSqlMI.DnsZone +"."+ "database.windows.net,3342"
-                            Write-Host "Connecting to '$($AzureSQLMIDB.Name)' on Azure SQL Manage Instance '$($AzureSqlMIFQDN)'..." ForegroundColor Magenta
+                            Write-Host "Connecting to '$($AzureSQLMIDB.Name)' on Azure SQL Manage Instance '$($AzureSqlMIFQDN)'..." -ForegroundColor Magenta
 
                             $AzSQLMIAADAdminConfigured = Get-AzSqlInstanceActiveDirectoryAdministrator -InstanceName $AzureSqlMI.ManagedInstanceName -ResourceGroup $AzureSqlMI.ResourceGroupName
                                 
                             #Validate if the provided admin user is actually configured as AAD Admin in Azure SQL Managed Instance 
 
-                            If (($AzSQLMIAADAdminConfigured.DisplayName -eq $AzSQLMIAADAdminPrompted.DisplayName) -OR ($AzSQLMIAADAdminPromptedGroups.ForEach({$_.ObjectId}) -contains $AzSQLMIAADAdminConfigured.ObjectId))
+                            If (($AzSQLMIAADAdminConfigured.DisplayName -eq $AzSQLMIAADAdminPrompted.UserPrincipalName) -OR ($AzSQLMIAADAdminPromptedGroups.ForEach({$_.ObjectId}) -contains $AzSQLMIAADAdminConfigured.ObjectId))
                             {
 
                                 }else {
-                                    Write-Output "'$($AzSQLMIAADAdminPrompted.UserPrincipalName)' is not Admin in Azure SQL Managed Instance:'$($AzureSqlMIFQDN)'."
+                                    Write-Output "'$($AzSQLMIAADAdminPrompted.UserPrincipalName)' is not Admin in Azure SQL Managed Instance:'$($AzureSqlMI.ManagedInstanceName)'."
                                     $Confirmation = Read-Host -Prompt "Press Y to enter new Administrator credentials"
                                     if ($Confirmation -eq "Y") 
                                         {
@@ -555,7 +582,7 @@ If ($AzureDataType -eq "AzureSQLMI") {
                                             $AzSQLMIAADAdminPrompted = Get-AzureADUser -ObjectId $AzSQLMIAADAdminPrompted
                                    
                                         }else {
-                                            Write-Host "Skipping '$($AzureSqlMIFQDN)'. Azure Purview will not be able to scan this Azure SQL Managed Instance!" ForegroundColor Red
+                                            Write-Host "Skipping '$($AzureSqlMIFQDN)'. Azure Purview will not be able to scan this Azure SQL Managed Instance!" -ForegroundColor Red
                                         } 
                                      
                                 }
@@ -567,7 +594,7 @@ If ($AzureDataType -eq "AzureSQLMI") {
    
                     }                
                     Write-host "`n"
-                    write-host "Readiness deployment completed for Storage Accounts in '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
+                    write-host "Readiness deployment completed for Azure SQL Managed Instances in '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
                     write-host "-".PadRight(98, "-") -ForegroundColor Green
                     Write-host "`n" 
                 }

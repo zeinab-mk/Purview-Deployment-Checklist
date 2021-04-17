@@ -186,6 +186,7 @@ The following permissions (minimum) are needed run the script in your Azure envi
 Role | Scope | Why is needed? |
 |-------|--------|--------|
 | Global Reader | Azure AD Tenant | To read Azure SQL Admin user group membership and Azure Purview MSI |
+| Global Administrator | Azure AD Tenant | To assign 'Directory Reader' role to Azure SQL Managed Instances |
 | Reader | Subscription where Azure Purview Account is created | To read Azure Purview Account resource |
 | Owner or User Access Administrator | Management Group or Subscription where your Azure Data Sources reside | To assign RBAC |
 | Contributor | Management Group or Subscription where your Azure Data Sources reside | To setup Network configuration |
