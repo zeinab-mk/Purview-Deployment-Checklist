@@ -57,7 +57,9 @@ Param
  
 )
 
-#$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Continue'
+$WarningPreference ='silentlycontinue'
+
 # Set-StrictMode -Version Latest
 
 <#if (-not($skipAzModules))
@@ -128,6 +130,46 @@ If ($null -ne $PurviewAccountMSI) {
 }else {
     Write-Host "There is no Managed Identity for Azure Purview Account $($PurviewAccount)! Terminating..." -ForegroundColor red
     Break
+}
+
+# Key Vault
+#Validate if there is a KV in Purview RG
+If (($AzureDataType -eq "AzureSQLDB") -or ($AzureDataType -eq "AzureSQLMI")) {
+        
+    $PurviewKVs = Get-AzKeyVault -ResourceGroupName (Get-AzResource -Name $PurviewAccount).ResourceGroupName
+    If (!$PurviewKVs)
+    {
+        #Create Azure Key Vault and keep Authentication information to get access to Azure SQL and Azure SQL MI
+        $random6 = -join ((48..57) + (97..122) | Get-Random -Count 6 | % {[char]$_})
+        $PurviewKV = $PurviewAccount + "-kv-" + $random6
+        $PurviewKV = New-AzKeyVault -Name $PurviewKV -ResourceGroupName (Get-AzResource -Name $PurviewAccount).ResourceGroupName -Location (Get-AzResource -Name $PurviewAccount).Location
+    }else{
+        #Validate if there is already a secret 
+        foreach ($PurviewKV in $PurviewKVs)
+        {
+            $AzSQLCreds = Get-AzKeyVaultSecret -VaultName $PurviewKV.VaultName | Where-Object { $_.Name -eq "AzSQLCreds" }
+        }          
+    }
+    
+    If (!$AzSQLCreds){
+    
+        write-host "`n"
+        Write-host "Please provide the required information! Enter Azure AD Admin's username and password to login to Azure SQL Servers:" -ForegroundColor blue
+        $cred = Get-Credential
+        $SecretString = ConvertTo-SecureString -AsPlainText -Force -String ($Cred.UserName + "`v" + $Cred.GetNetworkCredential().Password)
+        
+    }
+        
+    $PurviewKVAccessPolicy = @{
+        ObjectId                  = $PurviewAccountMSI
+        VaultName                 = $PurviewKV.VaultName
+        ResourceGroupName         = $PurviewKV.ResourceGroupName
+        PermissionsToSecrets      = @('Get','List')
+        
+    }
+    Set-AzKeyVaultAccessPolicy @PurviewKVAccessPolicy
+    $AzSQLCreds = Set-AzKeyVaultSecret -Name "AzSQLCreds" -VaultName $PurviewKV.VaultName -SecretValue $SecretString -ContentType 'PSCredential'
+    $AzSQLCreds = $AzSQLCreds.SecretValue
 }
 
 <## List MGs
@@ -225,7 +267,7 @@ If ($AzureDataType -eq "AzureSQLDB") {
                 Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
                                             
                 $AzureSqlServers = Get-AzSqlServer
-                foreach ($AzureSqlServer in $AzureSqlServers) {
+                foreach ($AzureSqlServer in $yAzureSqlServers) {
 
                     Write-Host "Verifying SQL Server: '$($AzureSqlServer.ServerName)'... " -ForegroundColor Magenta
 
@@ -266,7 +308,7 @@ If ($AzureDataType -eq "AzureSQLDB") {
                                   
                     $AzSQLAADAdminConfigured = Get-AzSqlServerActiveDirectoryAdministrator -ServerName $AzureSqlServer.ServerName -ResourceGroup $AzureSqlServer.ResourceGroupName
                     Write-host "Please provide the required information! " -ForegroundColor blue 
-                    $AzSQLAADAdminPrompted = Read-Host -Prompt "Enter your Azure SQL Administrator account that is Azure AD Integrated on Azure SQL Server or enter a username to configure as Admin on the server: '$($AzureSqlServer.ServerName)'"
+                    $AzSQLAADAdminPrompted =  $AzSQLMIAADAdminPrompted = (([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[0]
                     $AzSQLAADAdminPrompted = Get-AzureADUser -ObjectId $AzSQLAADAdminPrompted
                     $AzSQLAADAdminPromptedGroups = Get-AzureADUserMembership -ObjectId $AzSQLAADAdminPrompted.ObjectId  
 
@@ -318,7 +360,7 @@ If ($AzureDataType -eq "AzureSQLDB") {
 
                                 }
 
-                            sqlcmd -S $AzureSqlServer.FullyQualifiedDomainName -d $AzureSQLDB.DatabaseName -U $AzSQLAADAdminPrompted.UserPrincipalName -G -Q "CREATE USER [$PurviewAccount] FROM EXTERNAL PROVIDER; EXEC sp_addrolemember 'db_datareader', [$PurviewAccount];"
+                            sqlcmd -S $AzureSqlServer.FullyQualifiedDomainName -d $AzureSQLDB.DatabaseName -U ((([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[0]) -P ((([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[1]) -G -Q "CREATE USER [$PurviewAccount] FROM EXTERNAL PROVIDER; EXEC sp_addrolemember 'db_datareader', [$PurviewAccount];"
                             Write-Output "Azure SQL DB: db_datareader role is now assigned to $PurviewAccount in '$($AzureSQLDB.DatabaseName)' on Azure SQL Server '$($AzureSqlServer.ServerName)'."
                         }             
                     } 
@@ -504,7 +546,7 @@ If ($AzureDataType -eq "AzureSQLMI") {
                     }
                     write-host ""
                     Write-host "Please provide the required information! " -ForegroundColor blue
-                    $AzSQLMIAADAdminPrompted = Read-Host -Prompt "Enter your Azure SQL Administrator account that is Azure AD Integrated or enter a username to configure as Admin on Azure SQL Managed Instance: '$($AzureSqlMI.ManagedInstanceName)'"
+                    $AzSQLMIAADAdminPrompted = (([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[0]
                     $AzSQLMIAADAdminPrompted = Get-AzureADUser -ObjectId $AzSQLMIAADAdminPrompted
                     $AzSQLMIAADAdminPromptedGroups = Get-AzureADUserMembership -ObjectId $AzSQLMIAADAdminPrompted.ObjectId     
                     
@@ -538,7 +580,7 @@ If ($AzureDataType -eq "AzureSQLMI") {
                        $AzureADReaderMembers = Get-AzureADDirectoryRoleMember -ObjectId $AzureADReader.ObjectId
                        $selDirReader =$AzureADReaderMembers | where{$_.ObjectId -match $AzureADReaderMember.ObjectId}
 
-                        if ($selDirReader -eq $null) {
+                        if ($null -eq $selDirReader) {
                             # Add principal to AAD Readers role
                             Write-Host "Adding service principal '$($AzureSqlMI.ManagedInstanceName)' to 'Directory Readers' role'..."
                             Add-AzureADDirectoryRoleMember -ObjectId $AzureADReader.ObjectId -RefObjectId $AzureADReaderMember.ObjectId
@@ -587,7 +629,7 @@ If ($AzureDataType -eq "AzureSQLMI") {
                                      
                                 }
 
-                                sqlcmd -S $AzureSqlMIFQDN -d $AzureSQLMIDB.Name -U $($AzSQLMIAADAdminPrompted.UserPrincipalName) -G -Q "CREATE USER [$PurviewAccount] FROM EXTERNAL PROVIDER; EXEC sp_addrolemember 'db_datareader', [$PurviewAccount];"
+                                sqlcmd -S $AzureSqlMIFQDN -d $AzureSQLMIDB.Name -U ((([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[0]) -P ((([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[1]) -G -Q "CREATE USER [$PurviewAccount] FROM EXTERNAL PROVIDER; EXEC sp_addrolemember 'db_datareader', [$PurviewAccount];"
                                 Write-Output  "Azure SQL DB: db_datareader role is now assigned to $PurviewAccount in '$($AzureSQLMIDB.Name)' on Azure SQL Managed Instance '$($AzureSQLMIDBs.ManagedInstanceName)'."   
                             }
                         }

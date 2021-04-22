@@ -196,6 +196,48 @@ if ($Scope -eq "1")
     #Write-Host "Running readiness check on '$($DataSubContext.Subscription.Name)'..." -ForegroundColor Magenta
 }
 
+# Key Vault
+#Validate if there is a KV in Purview RG
+If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB") -or ($AzureDataType -eq "AzureSQLMI")) {
+
+    $PurviewKVs = Get-AzKeyVault -ResourceGroupName (Get-AzResource -Name $PurviewAccount).ResourceGroupName
+    If (!$PurviewKVs)
+    {
+        #Create Azure Key Vault and keep Authentication information to get access to Azure SQL and Azure SQL MI
+        $random6 = -join ((48..57) + (97..122) | Get-Random -Count 6 | % {[char]$_})
+        $PurviewKV = $PurviewAccount + "-kv-" + $random6
+        $PurviewKV = New-AzKeyVault -Name $PurviewKV -ResourceGroupName (Get-AzResource -Name $PurviewAccount).ResourceGroupName -Location (Get-AzResource -Name $PurviewAccount).Location
+    }else{
+        #Validate if there is already a secret 
+        foreach ($PurviewKV in $PurviewKVs)
+        {
+            $AzSQLCreds = Get-AzKeyVaultSecret -VaultName $PurviewKV.VaultName | Where-Object { $_.Name -eq "AzSQLCreds" }
+        }          
+    }
+    
+        
+    If (!$AzSQLCreds){
+    
+        write-host "`n"
+        Write-host "Please provide the required information! Enter Azure AD Admin's username and password to login to Azure SQL Servers:" -ForegroundColor blue
+        $cred = Get-Credential
+        $SecretString = ConvertTo-SecureString -AsPlainText -Force -String ($Cred.UserName + "`v" + $Cred.GetNetworkCredential().Password)
+        
+    }
+        
+        $PurviewKVAccessPolicy = @{
+            ObjectId                  = $PurviewAccountMSI
+            VaultName                 = $PurviewKV.VaultName
+            ResourceGroupName         = $PurviewKV.ResourceGroupName
+            PermissionsToSecrets      = @('Get','List')
+        
+        }
+        Set-AzKeyVaultAccessPolicy @PurviewKVAccessPolicy
+        $AzSQLCreds = Set-AzKeyVaultSecret -Name "AzSQLCreds" -VaultName $PurviewKV.VaultName -SecretValue $SecretString -ContentType 'PSCredential'
+        $AzSQLCreds = $AzSQLCreds.SecretValue
+    }
+
+
 #If Azure SQL Database (AzureSQLDB) is selected for Azure Data Sources
 If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
     Write-Host ""
@@ -275,19 +317,17 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
                        #Get databases in an Azure SQL Server 
                        $AzureSQLDBs = Get-AzSqlDatabase -ServerName $AzureSqlServer.ServerName -ResourceGroup $AzureSqlServer.ResourceGroupName
                     
-                       #Get SQL role for Azure Purview MSI 
-                       Write-host "Please provide the required information! " -ForegroundColor blue 
-                       $AzSQLAADAdminPrompted = Read-Host -Prompt "Enter your Azure SQL Administrator account that is Azure AD Integrated"
-    
-                       $AzSQLAADAdminPrompted = Get-AzureADUser -ObjectId $AzSQLAADAdminPrompted
-                       
+                                             
                        foreach ($AzureSQLDB in $AzureSQLDBs) {
                            if ($AzureSQLDB.DatabaseName -ne "master") {
                           
                                Write-Host "`n"
                                Write-Host "Connecting to '$($AzureSQLDB.DatabaseName)' on Azure SQL Server: '$($AzureSqlServer.ServerName)'..." -ForegroundColor Magenta
                                                                                  
-                               $AzurePurviewMSISQLRole = sqlcmd -S $AzureSqlServer.FullyQualifiedDomainName -d $AzureSQLDB.DatabaseName -U $AzSQLAADAdminPrompted.UserPrincipalName -G -Q "SELECT r.name role_principal_name FROM sys.database_role_members rm JOIN sys.database_principals r ON rm.role_principal_id = r.principal_id JOIN sys.database_principals m ON rm.member_principal_id = m.principal_id where m.name = '$PurviewAccount'"
+                                                            
+                               $AzurePurviewMSISQLRole = sqlcmd -S $AzureSqlServer.FullyQualifiedDomainName -d $AzureSQLDB.DatabaseName -U ((([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[0]) -P ((([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[1]) -G -Q "SELECT r.name role_principal_name FROM sys.database_role_members rm JOIN sys.database_principals r ON rm.role_principal_id = r.principal_id JOIN sys.database_principals m ON rm.member_principal_id = m.principal_id where m.name = '$PurviewAccount'"
+
+
                                if (($null -ne $AzurePurviewMSISQLRole) -and ($AzurePurviewMSISQLRole -notlike "*Error*")) {
                                    $AzurePurviewMSISQLRole = $AzurePurviewMSISQLRole.trim()
                                    if (($AzurePurviewMSISQLRole.Contains("db_datareader")) -or ($AzurePurviewMSISQLRole.Contains("db_owner"))) {
@@ -297,9 +337,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
                                  } 
 
                                 }
-                               
-                               
-
+                                                            
                             }             
                   
                   
@@ -446,10 +484,6 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLMI")) {
                     }else {
                         Write-Host "Passed! Azure AD Admin '$($AzSQLMIAADAdminConfigured.DisplayName)' is configured for Azure SQL Managed Instance $($AzureSqlMI.ManagedInstanceName)!'"
                         
-                        Write-host "Please provide the required information! " -ForegroundColor blue 
-                        $AzSQLMIAADAdminPrompted = Read-Host -Prompt "Please enter your Azure SQL Managed Instances Administrator account that is Azure AD Integrated"
-                        $AzSQLMIAADAdminPrompted = Get-AzureADUser -ObjectId $AzSQLMIAADAdminPrompted
-
                         #Get databases in an Azure SQL Managed Instance 
                         $AzureSQLMIDBs = Get-AzSqlInstanceDatabase -InstanceName $AzureSqlMI.ManagedInstanceName -ResourceGroup $AzureSqlMI.ResourceGroupName
                    
@@ -461,7 +495,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLMI")) {
                                 Write-Host "`n"
                                 Write-Host "Connecting to '$($AzureSQLMIDB.Name)' on Azure SQL Managed Instance '$($AzureSqlMIFQDN)'" -ForegroundColor Magenta
                                                               
-                                $AzurePurviewMSISQLMIRole = sqlcmd -S $AzureSqlMIFQDN -d $AzureSQLMIDB.Name -U $($AzSQLMIAADAdminPrompted.UserPrincipalName) -G -Q "SELECT r.name role_principal_name FROM sys.database_role_members rm JOIN sys.database_principals r ON rm.role_principal_id = r.principal_id JOIN sys.database_principals m ON rm.member_principal_id = m.principal_id where m.name = '$PurviewAccount'"
+                                $AzurePurviewMSISQLMIRole = sqlcmd -S $AzureSqlMIFQDN -d $AzureSQLMIDB.Name -U ((([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[0]) -P ((([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[1]) -G -Q "SELECT r.name role_principal_name FROM sys.database_role_members rm JOIN sys.database_principals r ON rm.role_principal_id = r.principal_id JOIN sys.database_principals m ON rm.member_principal_id = m.principal_id where m.name = '$PurviewAccount'"
                                                                 
                                 if (($null -ne $AzurePurviewMSISQLMIRole) -and ($AzurePurviewMSISQLMIRole -notlike "*Error*")) {
                                     $AzurePurviewMSISQLMIRole = $AzurePurviewMSISQLMIRole.trim()
