@@ -99,7 +99,16 @@ You can choose **all** or any of these data sources as input when running the sc
 
 As your data sources scope, you can select a top-level **Management Group** or a **Subscription**. If you select a Management Group, the readiness check script will run on all subscriptions inside the Management Group including child Management Groups. If you select a Subscription as data source scope, the script will only run on the resources in selected subscription.
 
-## 2.2 Required Permissions
+## 2.4 prerequisites
+
+The following prerequisites are required to successfully run the script:
+
+- An Azure Subscription.
+- An Azure Purview Account.
+- Access to Azure AD and Azure Subscriptions where Azure Purview account and data sources are deployed.
+- If Azure AD Authentication enbaled for Azure SQL Servers and Managed Instances, a user added as SQL Admin or member of Azure AD group that is configured as Azure AD Authentication in SQL Servers.  
+
+## 2.4.1 Required Permissions
 
 The following permissions (minimum) are needed run the script in your Azure environment:
 Role | Scope |
@@ -109,7 +118,7 @@ Role | Scope |
 | Reader | Subscription where Azure Purview Account is created |
 | SQL Admin (Azure AD Authentication) | Azure SQL Servers or Azure SQL Managed Instances |
 
-## 2.3 Required Modules
+## 2.4.2 Required Modules
 
 This script requires Azure PowerShell [Az](https://docs.microsoft.com/en-us/powershell/azure/new-azureps-module-az?view=azps-5.8.0) Modules.
 
