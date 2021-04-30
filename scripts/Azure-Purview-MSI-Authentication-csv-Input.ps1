@@ -203,7 +203,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
             Write-Host "Verifying SQL Server: '$($AzureSqlServer.ServerName)'... " -ForegroundColor Magenta
 
             #Public and Private endpoint 
-            $PrivateEndPoints = Get-AzPrivateEndpointConnection -PrivateLinkResourceId $AzureSqlServer.ResourceId
+            $PrivateEndPoints = Get-AzPrivateEndpointConnection -PrivateLinkResourceId $AzureSqlServer.ResourceId -ErrorAction SilentlyContinue -ErrorVariable error2
             if ($PrivateEndPoints.Count -ne 0) {
                 Write-Host "Awareness! Private Endpoints: '$($PrivateEndPoints.Name)' is configured on Azure SQL server: '$($AzureSqlServer.ServerName)'."
             }else {
@@ -645,7 +645,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "ADLSGen1")) {
             }
                 
             #Set ACL
-            $AzureDataLakeACLs = Get-AzDataLakeStoreItemAclEntry -Account $AzureDataLake.Name -Path / -ErrorAction SilentlyContinue -ErrorVariable $error1
+            $AzureDataLakeACLs = Get-AzDataLakeStoreItemAclEntry -Account $AzureDataLake.Name -Path / -ErrorAction SilentlyContinue -ErrorVariable error1
             if ($error1 -match "doesn't originate from an allowed virtual network, based on the configuration of the Azure Data Lake account") {
                     #Missing network rules from client machine to ADLS Gen 1
                     Write-host "Unable to access Azure Data Lake Storage Gen 1 Account: '$($AzureDataLake.Name)'! Update firewall rules to allow access from your IP Address!" -ForegroundColor red 

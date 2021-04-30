@@ -507,7 +507,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "BlobStorage"))
             }
                  
             #Private Endpoint enabled 
-            $PrivateEndPoints = Get-AzPrivateEndpointConnection -PrivateLinkResourceId $StorageAccount.Id -ErrorAction SilentlyContinue -ErrorVariable $error2
+            $PrivateEndPoints = Get-AzPrivateEndpointConnection -PrivateLinkResourceId $StorageAccount.Id -ErrorAction SilentlyContinue -ErrorVariable error2
             if ($PrivateEndPoints.Count -ne 0) {
                 Write-Host "Awareness! Private Endpoint is configured for Storage Account: '$($StorageAccount.StorageAccountName)': '$($PrivateEndPoints.Name)'"
             }else {
@@ -624,7 +624,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "ADLSGen1")) {
             }
                 
             #Verify ACL
-            $AzureDataLakeACLs = Get-AzDataLakeStoreItemAclEntry -Account $AzureDataLake.Name -Path / -ErrorAction SilentlyContinue -ErrorVariable $error1
+            $AzureDataLakeACLs = Get-AzDataLakeStoreItemAclEntry -Account $AzureDataLake.Name -Path / -ErrorAction SilentlyContinue -ErrorVariable error1
             if ($error1 -match "doesn't originate from an allowed virtual network, based on the configuration of the Azure Data Lake account") {
                 #Missing network rules from client machine to ADLS Gen 1
                 Write-host "Not Passed! Unable to access Azure Data Lake Storage Gen 1 Account: '$($AzureDataLake.Name)'! Update firewall rules to allow access from your IP Address!" -ForegroundColor red 
