@@ -210,7 +210,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB"))
                   
             If ($AzureSqlServer.PublicNetworkAccess -like 'False') {
                 #Public EndPoint disabled
-                Write-Output "Awareness! Public Endpoint is not allowd on Azure SQL server: '$($AzureSqlServer.ServerName)',verifying Private Endpoints..."
+                Write-Output "Awareness! Public Endpoint is not allowed on Azure SQL server: '$($AzureSqlServer.ServerName)',verifying Private Endpoints..."
 
             }else 
             {
@@ -507,11 +507,11 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "BlobStorage"))
             }
                  
             #Private Endpoint enabled 
-            $PrivateEndPoints = Get-AzPrivateEndpointConnection -PrivateLinkResourceId $StorageAccount.Id
+            $PrivateEndPoints = Get-AzPrivateEndpointConnection -PrivateLinkResourceId $StorageAccount.Id -ErrorAction SilentlyContinue -ErrorVariable $error2
             if ($PrivateEndPoints.Count -ne 0) {
                 Write-Host "Awareness! Private Endpoint is configured for Storage Account: '$($StorageAccount.StorageAccountName)': '$($PrivateEndPoints.Name)'"
             }else {
-                Write-Host "Awareness! Private Endpoint is not configured on Storage Account: '$($StorageAccount.StorageAccountName)"
+                Write-Host "Awareness! Private Endpoint is not configured on Storage Account: '$($StorageAccount.StorageAccountName)'"
             }
                 write-host ""
         }
@@ -624,7 +624,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "ADLSGen1")) {
             }
                 
             #Verify ACL
-            $AzureDataLakeACLs = Get-AzDataLakeStoreItemAclEntry -Account $AzureDataLake.Name -Path / -ErrorAction SilentlyContinue -ErrorVariable error1
+            $AzureDataLakeACLs = Get-AzDataLakeStoreItemAclEntry -Account $AzureDataLake.Name -Path / -ErrorAction SilentlyContinue -ErrorVariable $error1
             if ($error1 -match "doesn't originate from an allowed virtual network, based on the configuration of the Azure Data Lake account") {
                 #Missing network rules from client machine to ADLS Gen 1
                 Write-host "Not Passed! Unable to access Azure Data Lake Storage Gen 1 Account: '$($AzureDataLake.Name)'! Update firewall rules to allow access from your IP Address!" -ForegroundColor red 
