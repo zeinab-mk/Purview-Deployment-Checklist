@@ -25,7 +25,9 @@ PRE-REQUISITES:
     4.2 For ADLSGen1 and ADLSGen2: Owner or User Access Administrator on data sources' subscriptions
     4.3 For AzureSQLDB: Read Key Vault and have access to get/list Azure Key Vault secret where Azure SQL Admin credentials are stored.   
     4.4 For AzureSQLMI: Read Key Vault and have access to get/list Azure Key Vault secret where Azure SQL Admin credentials are stored.  
-    4.5 Azure AD (at least Global Reader) to read Azure AD users and Groups. If Azure SQL MI Azure AD Authentication is not configured, you need access to update AAD Directory Reader role membership.
+    4.5 For Azure Synapse: Read Key Vault and have access to get/list Azure Key Vault secret where Azure Synapse Admin credentials are stored.
+    4.6 Azure AD (at least Global Reader) to read Azure AD users and Groups. If Azure SQL MI Azure AD Authentication is not configured, you need access to update AAD Directory Reader role membership.
+    4.7 Azure Contributor role on data sources.
 
 Execute this script by providing the following parameters:
     1. create a csv file (e.g. "C:\Temp\Subscriptions.csv) with 4 columns:
@@ -38,11 +40,11 @@ Execute this script by providing the following parameters:
         example: ContosoDevKeyVault
 
         c. Column name: SecretNameSQLUserName
-        Provide existing key vault secret name that contains Azure SQL Servers/ SQL MI Azure AD authentication admin username saved in the secret. This user can be added to a group that is configured in Azure AD authentication on Azure SQL Servers.
+        Provide existing key vault secret name that contains Azure Synapse / Azure SQL Servers/ SQL MI Azure AD authentication admin username saved in the secret. This user can be added to a group that is configured in Azure AD authentication on Azure SQL Servers.
         example: ContosoDevSQLAdmin
 
         d. Column name: SecretNameSQLPassword
-        Provide existing key vault secret name that contains Azure SQL Servers/ SQL MI Azure AD authentication admin password saved in the secret. This user can be added to a group that is configured in Azure AD authentication on Azure SQL Servers.
+        Provide existing key vault secret name that contains Azure Synapse / Azure SQL Servers/ SQL MI Azure AD authentication admin password saved in the secret. This user can be added to a group that is configured in Azure AD authentication on Azure SQL Servers.
         example: ContosoDevSQLPassword
 
         Note: Before running this script update the file name / path further in the code, if needed.
@@ -54,6 +56,7 @@ Execute this script by providing the following parameters:
         "AzureSQLDB"
         "ADLSGen2"
         "ADLSGen1"
+        "Synapse"
         "All"
 
     3. PurviewAccount: Your existing Azure Purview Account resource name.
@@ -80,8 +83,6 @@ This posting is provided "AS IS" with no warranties, and confers no rights.
 1. https://docs.microsoft.com/en-us/azure/purview/overview
 2. https://docs.microsoft.com/en-us/sql/tools/sqlcmd-utility?view=sql-server-ver15 
 
-
-
 .COMPONENT
 Azure Infrastructure, PowerShell
 
@@ -89,7 +90,7 @@ Azure Infrastructure, PowerShell
 
 Param
 (
-    [ValidateSet("BlobStorage", "AzureSQLMI", "AzureSQLDB", "ADLSGen2", "ADLSGen1", "All")]
+    [ValidateSet("BlobStorage", "AzureSQLMI", "AzureSQLDB", "ADLSGen2", "ADLSGen1", "Synapse", "All")]
     [string] $AzureDataType = "All",
     [string] $PurviewAccount,
     [string] $PurviewSub
@@ -116,12 +117,13 @@ AzureSQLDB      for Azure SQL Database
 AzureSQLMI      for Azure SQL Managed Instance
 ADLSGen2        for Azure Data Lake Storage Gen 2
 ADLSGen1        for Azure Data Lake Storage Gen 1
+Synapse         for Azure Synapse Analytics
 All             for all the above data sources 
  #>
 Write-Host "'$AzureDataType' is selected as Data Source." -ForegroundColor Magenta
 
 
-#Clear any possible cached credentials for other subscriptions
+<#Clear any possible cached credentials for other subscriptions
 Clear-AzContext
 
 #Login to Azure AD 
@@ -131,12 +133,11 @@ Connect-AzureAD
 #Authentication to Azure 
 Write-Host "Please sign in with your Azure administrator credentials:"
 Login-AzAccount
+#>
 
 #Purview subscription 
-Set-AzContext -Subscription $PurviewSub | Out-Null
 
-#$tenantName = (Get-AzContext).Tenant
-$PurviewSubContext = Get-AzContext
+$PurviewSubContext = Set-AzContext -Subscription $PurviewSub 
 Write-Host "Subscription: '$($PurviewSubContext.Subscription.Name)' is selected where Azure Purview Account is deployed." -ForegroundColor Magenta
 
 #get Purview account MSI and location
@@ -207,7 +208,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
             if ($PrivateEndPoints.Count -ne 0) {
                 Write-Host "Awareness! Private Endpoints: '$($PrivateEndPoints.Name)' is configured on Azure SQL server: '$($AzureSqlServer.ServerName)'."
             }else {
-                Write-Host "Awareness! Private Endpoint is not configured on Azure SQL Server: '$($AzureSqlServer.ServerName), Verifying Firewall Rules...'."
+                Write-Host "Awareness! Private Endpoint is not configured on Azure SQL Server: '$($AzureSqlServer.ServerName)', Verifying Firewall Rules...'."
             }    
             If ($AzureSqlServer.PublicNetworkAccess -like 'Enabled') {
                 #Public EndPoint enabled
@@ -215,7 +216,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
                 $AzureSqlServerFw = Get-AzSqlServerFirewallRule -ServerName $AzureSqlServer.ServerName -ResourceGroup $AzureSqlServer.ResourceGroupName "Rule*"
                 if (($AzureSqlServerFw.FirewallRuleName -contains "AllowAllWindowsAzureIps") -or ($AzureSqlServerFw.FirewallRuleName -contains "AllowAllAzureIPs"))
                 {
-                        Write-Output "'Allow Azure services and resources to access this server' is enabled! No action is needed." 
+                        Write-Output "'Allow Azure services and resources to access this server' is enabled on Azuer SQL Server: '$($AzureSqlServer.ServerName)'. No action is needed." 
                 }else {
                     
                     #Azure IPs are not allowed to access Azure SQL Server     
@@ -231,7 +232,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
             $AzSQLAADAdminConfigured = Get-AzSqlServerActiveDirectoryAdministrator -ServerName $AzureSqlServer.ServerName -ResourceGroup $AzureSqlServer.ResourceGroupName
             
             # Validate whether the sql admin user account that is provided in csv, actually exists in AAD  
-            $AzSQLAADAdminPrompted =  $AzSQLMIAADAdminPrompted = ([System.Net.NetworkCredential]::new("", $AzSQLUserName).Password)
+            $AzSQLAADAdminPrompted =  $AzSQLAADAdminPrompted = ([System.Net.NetworkCredential]::new("", $AzSQLUserName).Password)
             $AzSQLAADAdminPrompted = Get-AzureADUser -ObjectId $AzSQLAADAdminPrompted
             $AzSQLAADAdminPromptedGroups = Get-AzureADUserMembership -ObjectId $AzSQLAADAdminPrompted.ObjectId  
 
@@ -677,4 +678,162 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "ADLSGen1")) {
         Write-host "`n"                    
     }    
     
+}
+
+# If Azure Synapse (Synapse) is selected for Azure Data Source 
+If (($AzureDataType -eq "all") -or ($AzureDataType -eq "Synapse")) {
+
+    Write-Host ""
+    Write-Host "Processing Azure Synapse..." -ForegroundColor Magenta
+    Write-host ""
+       
+    foreach($Subscription in $Subscriptions) {
+        # Select and process each data source subscription from the csv       
+        $currentSubscription++;            
+        $DataSub = Select-AzSubscription -SubscriptionId $Subscription.SubscriptionId;
+        $DataSubContext = Get-AzContext 
+        Write-Host "Processing Subscription: '$($DataSubContext.Subscription.Name)'..."  -ForegroundColor Magenta
+      
+        Write-Host "Processing RBAC assignments for Azure Purview Account $($PurviewAccount) for $AzureDataType ..." -ForegroundColor Magenta
+        $ControlPlaneRole = "Reader"
+        $RBACScope = "/subscriptions/" + $DataSubContext.Subscription.SubscriptionId
+
+        #Check if Reader role is assigned            
+        $ExistingReaderRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $RBACScope
+                    
+        if (!$ExistingReaderRole) {
+            #Assign Reader role to Azure Purview 
+            New-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $RBACScope
+            Write-Output "Azure RBAC 'Reader' role is now assigned to Azure Purview at the selected scope!"
+        }else {
+            Write-Output "Azure RBAC 'Reader' role is already assigned to Azure Purview at the selected scope. No action is needed." 
+        }
+                    
+        Write-Host ""
+        #Verify whether RBAC is already assigned, otherwise assign RBAC
+        $Role = "Storage Blob Data Reader"
+        $ExistingRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $Role -Scope $RBACScope
+                        
+        if (!$ExistingRole) {
+            New-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $Role -Scope $RBACScope  
+            Write-Output  "Azure RBAC 'Storage Blob Data Reader' role is now assigned to '$PurviewAccount' at Subscription: '$($DataSubContext.Subscription.Name)'."
+        }else {
+            Write-Output "Azure RBAC 'Storage Blob Data Reader' role is already assigned to '$PurviewAccount' at Subscription: '$($DataSubContext.Subscription.Name)'. No action is needed." 
+        }
+
+        #get az kv secrets
+        $PurviewKV = Get-AzKeyVault -VaultName $Subscription.KeyVaultName
+        If ($null -eq $PurviewKV) 
+        {
+            Write-Host "Key Vault '$($Subscription.KeyVaultName)' Account not found!" -ForegroundColor red
+        }else {
+            # get sql admin user 
+            $AzSQLUserName = Get-AzKeyVaultSecret -VaultName $PurviewKV.VaultName -Name $Subscription.SecretNameSQLUserName
+            If ($null -eq $AzSQLUserName) 
+            {
+                Write-Host "Key Vault Secret: $($Subscription.SecretNameSQLUserName)' not found in Key Vault Account: '$($Subscription.KeyVaultName)'!" -ForegroundColor red
+            }else {
+                $AzSQLUserName =  $AzSQLUserName.SecretValue     
+            }
+            
+            #get sql admin password 
+            $AzSQLPassword = Get-AzKeyVaultSecret -VaultName $PurviewKV.VaultName -Name $Subscription.SecretNameSQLPassword
+            If ($null -eq $AzSQLPassword) 
+            {
+                Write-Host "Key Vault Secret: $($Subscription.SecretNameSQLPassword)' not found in Key Vault Account: '$($Subscription.KeyVaultName)'!" -ForegroundColor red
+            }else {
+                $AzSQLPassword =  $AzSQLPassword.SecretValue
+            }            
+        }
+
+        $AzureSynapseWorkspaces = Get-AzSynapseWorkspace
+        foreach ($AzureSynapseWorkspace in $AzureSynapseWorkspaces) {
+
+            Write-Host "Verifying Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'... " -ForegroundColor Magenta
+
+            #Public and Private endpoint 
+            $PrivateEndPoints = Get-AzPrivateEndpointConnection -PrivateLinkResourceId $AzureSynapseWorkspace.Id -ErrorAction SilentlyContinue -ErrorVariable error2
+            if ($PrivateEndPoints.Count -ne 0) {
+                Write-Host "Awareness! Private Endpoints: '$($PrivateEndPoints.Name)' is configured on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'."
+            }else {
+                Write-Host "Awareness! Private Endpoint is not configured on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name), Verifying Firewall Rules...'."
+            }    
+            If ($AzureSynapseWorkspace.PublicNetworkAccess -like 'Enabled') {
+                #Public EndPoint enabled
+                Write-Output "Awareness! Public Endpoint is allowed on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'."
+                $AzureSynapseServerFw = Get-AzSynapseFirewallRule -WorkspaceName $AzureSynapseWorkspace.Name 
+                if (($AzureSynapseServerFw.FirewallRuleName -contains "AllowAllWindowsAzureIps") -or ($AzureSynapseServerFw.FirewallRuleName -contains "AllowAllAzureIPs"))
+                {
+                        Write-Output "'Allow Azure services and resources to access this server' is enabled on Azure Synapse: '$($AzureSynapseWorkspace.Name)' No action is needed." 
+                }else {
+                    
+                    #Azure IPs are not allowed to access Azure Synapse Workspace     
+                    Write-host ""
+                    Write-host "'Allow Azure services and resources to access this server' is not enabled on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'! Processing..." -ForegroundColor yellow    
+                    New-AzSynapseFirewallRule -ResourceGroupName $AzureSqlServer.ResourceGroupName -WorkspaceName $AzureSynapseWorkspace.Name -AllowAllAzureIPs
+                    Write-Output "'Allow Azure services and resources to access this server' is now enabled on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)' "        
+
+                }        
+            }
+                   
+            #Verify / Assign Azure AD Admin                   
+            $AzSynapseAADAdminConfigured = Get-AzSynapseSqlActiveDirectoryAdministrator -WorkspaceName $AzureSynapseWorkspace.Name 
+            
+            # Validate whether the sql admin user account that is provided in csv, actually exists in AAD  
+            $AzSynapseAADAdminPrompted =  $AzSynapseAADAdminPrompted = ([System.Net.NetworkCredential]::new("", $AzSQLUserName).Password)
+            $AzSynapseAADAdminPrompted = Get-AzureADUser -ObjectId $AzSynapseAADAdminPrompted
+            $AzSynapseAADAdminPromptedGroups = Get-AzureADUserMembership -ObjectId $AzSynapseAADAdminPrompted.ObjectId  
+
+            If ($null -ne $AzSynapseAADAdminConfigured){
+
+                # Azure AD Authentucation is enabled on Azure Synapse Workspace
+                Write-Host "Verifying Azure AD Authentication on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)' ..." -ForegroundColor Magenta
+                  
+            }else {
+                        
+                # Azure AD Authentucation is not enabled on Azure Synapse Workspace
+                Write-Host "Azure AD Authentication is not enabled on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'! Processing..." -ForegroundColor yellow
+                            
+                # Set Azure AD Authentication on Azure Synapse Workspace
+                Set-AzSynapseSqlActiveDirectoryAdministrator -WorkspaceName $AzureSynapseWorkspace.Name -ResourceGroupName $AzureSqlServer.ResourceGroupName -DisplayName $AzSynapseAADAdminPrompted.DisplayName
+                Write-Output "Azure AD Authentication is now enabled for user: '$($AzSynapseAADAdminPrompted.DisplayName)' on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'."
+                $AzSynapseAADAdminConfigured = Get-AzSynapseSqlActiveDirectoryAdministrator -WorkspaceName $AzureSynapseWorkspace.Name 
+      
+            }    
+            #Assign SQL db_datareader Role to Azure Purview MSI on each Azure Synapse Dedicated Pool 
+            $AzureSynapsePools = Get-AzSynapseSqlPool -WorkspaceName $AzureSynapseWorkspace.Name
+            foreach ($AzureSynapsePool in $AzureSynapsePools) {
+              
+                                           
+                    #Validate if the provided admin user is actually configured as AAD Admin in Azure Synapse Workspace
+                    If (($AzSynapseAADAdminConfigured.DisplayName -eq $AzSynapseAADAdminPrompted.DisplayName) -OR ($AzSynapseAADAdminPromptedGroups.ForEach({$_.ObjectId}) -contains $AzSynapseAADAdminConfigured.ObjectId))
+                        {
+
+                            sqlcmd -S $AzureSynapseWorkspace.ConnectivityEndpoints.sql -d $AzureSynapsePool.SqlPoolName -I -U (([System.Net.NetworkCredential]::new("", $AzSQLUserName).Password)) -P (([System.Net.NetworkCredential]::new("", $AzSQLPassword).Password)) -G -Q "CREATE USER [$PurviewAccount] FROM EXTERNAL PROVIDER; EXEC sp_addrolemember 'db_datareader', [$PurviewAccount];"
+                            Write-Output "Azure SQL DB: db_datareader role is now assigned to $PurviewAccount in '$($AzureSynapsePool.SqlPoolName)' on Azure Synapse Workspace '$($AzureSynapseWorkspace.Name)'."
+
+                        }else {    
+                            Write-Output "'$($AzSynapseAADAdminPrompted.UserPrincipalName)' is not Admin in Azure Synapse Workspace:'$($AzureSynapseWorkspace.Name)'. '$($AzSynapseAADAdminConfigured.DisplayName)' is found as SQL Server Admin on Azure AD Authentication configuration on the server."
+                               
+                            Write-host "Please provide the required information! " -ForegroundColor blue
+                            $AzSynapseAADAdminPrompted = Read-Host -Prompt "Enter your Azure Synapse Workspace Administrator account that is Azure AD Integrated or press Enter to skip"
+                            if (!$AzSynapseAADAdminPrompted) { 
+                                Write-Host "Skipping '$($AzureSynapseWorkspace.Name)'. Azure Purview will not be able to scan this Azure Synapse Workspace!" -ForegroundColor Red 
+                            }else{
+                                $AzSynapseAADAdminPrompted = Get-AzureADUser -ObjectId $AzSynapseAADAdminPrompted
+                                sqlcmd -S $AzureSynapseWorkspace.ConnectivityEndpoints.sql -d $AzureSynapsePool.SqlPoolName -I -U $AzSynapseAADAdminPrompted.UserPrincipalName -G -Q "CREATE USER [$PurviewAccount] FROM EXTERNAL PROVIDER; EXEC sp_addrolemember 'db_datareader', [$PurviewAccount];"
+                                
+                                Write-Output "Azure SQL DB: db_datareader role is now assigned to $PurviewAccount in '$($AzureSynapsePool.SqlPoolName)' on Azure Synapse Workspace '$($AzureSynapseWorkspace.Name)'."
+                            }   
+                        }
+                             
+            } 
+                                
+            write-host ""
+        }  
+        Write-host "`n"
+        write-host "Readiness deployment completed for Azure Synapse in '$($DataSubContext.Subscription.Name)'." -ForegroundColor Green
+        write-host "-".PadRight(98, "-") -ForegroundColor Green
+        Write-host "`n" 
+    }  
 }

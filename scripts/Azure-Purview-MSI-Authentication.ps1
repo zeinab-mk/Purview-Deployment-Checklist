@@ -10,19 +10,30 @@ This script is aimed to help you to configure Azure Purview Managed Identity wit
 This PowerShell script is aimed to assist Azure Subscriptions administrators to set up required authentication using Azure Purview MSI to scan resources under a defined Management Group. 
 
 PRE-REQUISITES:
-1. If you already have the Az modules installed, you may still encounter the following error:
-    The script cannot be run because the following modules that are specified by the "#requires" statements of the script are missing: Az.at line:0 char:0
-    To resolve this issue, please run the following command to import the Az modules into your current session:
-    Import-Module -Name Az -Verbose
+
+
+1. Required PowerShell Modules:
+    Az 
+    Az.Synpase
+    AzureAD
+
+    Note: If you already have the Az modules installed, you may still encounter the following error:
+        The script cannot be run because the following modules that are specified by the "#requires" statements of the script are missing: Az.at line:0 char:0
+        To resolve this issue, please run the following command to import the Az modules into your current session:
+        Import-Module -Name Az -Verbose
 
 2. An Azure Purview Account.
+
 3. Azure resources such as Storage Accounts, ADLS Gen2 Azure SQL Databases or Azure SQL Managed Instances.
+
 4. Required permissions to run the script and assign the permissions:
     4.1 For BlobStorage: Owner or User Access Administrator on data sources' subscriptions
     4.2 For ADLSGen2: Owner or User Access Administrator on data sources' subscriptions
     4.3 For AzureSQLDB: Azure SQL Admin user (Authentication method: Azure Active Directory Authentication) 
     4.4 For AzureSQLMI: Azure SQL Managed Identity Admin user (Authentication method: Azure Active Directory Authentication)
     4.5 Azure AD (at least Global Reader) to read Azure AD users and Groups.
+
+5. SQLCMD
 
 .NOTES
 
@@ -52,8 +63,8 @@ Azure Infrastructure, PowerShell
 
 Param
 (
- #   [ValidateSet("BlobStorage", "ADLSGen1", "ADLSGen2", "AzureSQLDB", "AzureSQLMI")]
- [string] $AzureDataType = "BlobStorage"
+ [ValidateSet("BlobStorage", "AzureSQLMI", "AzureSQLDB", "ADLSGen2", "ADLSGen1", "Synapse", "All")]
+ [string] $AzureDataType = ""
  
 )
 
@@ -75,7 +86,11 @@ $WarningPreference ='silentlycontinue'
 Select one of the following Azure Data Sources type to assign required RBAC roles to your Azure Purview Account:
 BlobStorage     for Azure Blob Storage
 AzureSQLDB      for Azure SQL Database
-ADLSGen2 for    Azure Data Lake Storage Gen 2
+AzureSQLMI      for Azure SQL Managed Instance
+ADLSGen2        for Azure Data Lake Storage Gen 2
+ADLSGen1        for Azure Data Lake Storage Gen 1
+Synapse         for Azure Synapse Analytics
+All             for all the above data sources 
  #>
 
 Write-host ""
@@ -84,12 +99,12 @@ Write-host "Please provide the required information! " -ForegroundColor blue
 Do {
     $AzureDataType = Read-Host -Prompt "Type any of the following data sources: Type any of the following data sources: BlobStorage, ADLSGen2, ADLSGen1, AzureSQLDB or AzureSQLMI"
 }#end Do
-Until ($AzureDataType -in "BlobStorage", "ADLSGen2", "ADLSGen1", "AzureSQLDB", "AzureSQLMI")
+Until ($AzureDataType -in "BlobStorage", "AzureSQLMI", "AzureSQLDB", "ADLSGen2", "ADLSGen1", "Synapse", "All")
 
 Write-Host "$AzureDataType is selected as Data Source." -ForegroundColor Magenta
 
 
-#Clear any possible cached credentials for other subscriptions
+<#Clear any possible cached credentials for other subscriptions
 Clear-AzContext
 
 #Login to Azure AD 
@@ -101,6 +116,7 @@ Connect-AzureAD
 
 Login-AzAccount
 Write-Host "Please sign in with your Azure administrator credentials:"
+#>
 
 #List subscriptions
 Get-AzSubscription | Format-table -Property Name, Id, tenantid, state
@@ -134,7 +150,7 @@ If ($null -ne $PurviewAccountMSI) {
 
 # Key Vault
 #Validate if there is a KV in Purview RG
-If (($AzureDataType -eq "AzureSQLDB") -or ($AzureDataType -eq "AzureSQLMI")) {
+If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB") -or ($AzureDataType -eq "AzureSQLMI")) {
         
     $PurviewKVs = Get-AzKeyVault -ResourceGroupName (Get-AzResource -Name $PurviewAccount).ResourceGroupName
     If (!$PurviewKVs)
@@ -198,6 +214,9 @@ Do
 }  #end Do
 Until ($Scope -in "1","2")
 
+$DataSourceSubsIds.clear()
+$DataSourceSubsIds = [System.Collections.ArrayList]::new()
+
 if ($Scope -eq "1") 
 {
     Write-Host "Management Group is selected as data sources scope." -ForegroundColor Magenta
@@ -215,10 +234,36 @@ if ($Scope -eq "1")
 
     Write-Host "'$($TopLMG.Name)' is selected as Top-level Management Group." -ForegroundColor Magenta
     Write-Host ""
+    Write-Host "Processing '$($TopLMG.Name)' Management Group..." -ForegroundColor Magenta
+
+    $DataSourceMGs =  Get-AzManagementGroup 
+    foreach ($DataSourceMG in $DataSourceMGs) {
+
+        $DataSourceMG = Get-AzManagementGroup -GroupName $DataSourceMG.Name -Expand -Recurse
+        if ((($null -ne $DataSourceMG.ParentId) -and (($DataSourceMG.ParentId.Equals($TopLMG.Id)))) -or ($DataSourceMG.Id.StartsWith($TopLMG.Id))) {
+            foreach ($DataSourceChildMG in $DataSourceMG.Children) { #| Where-Object { $_.Type -eq "/subscriptions" }) {         
+                if ($DataSourceChildMG.Type -eq "/subscriptions") {
+                    $DataSourceChildMGSubId = $DataSourceChildMG.Id -replace '/subscriptions/',''
+                    $DataSourceSubsIds.Add($DataSourceChildMGSubId)    
+                }
+                if ($DataSourceChildMG.Children.Type -eq "/subscriptions") {
+                    $DataSourceChildMGSubId = $DataSourceChildMG.Children.Id -replace '/subscriptions/',''
+                    $DataSourceSubsIds.Add($DataSourceChildMGSubId) 
+                }
+
+                if ($DataSourceChildMG.Children.Children.Type -eq "/subscriptions") {
+                    $DataSourceChildMGSubId = $DataSourceChildMG.Children.Children.Id -replace '/subscriptions/',''
+                    $DataSourceSubsIds.Add($DataSourceChildMGSubId) 
+                }
+            }    
+        }    
+    }    
+    $DataSourceSubsIds = $DataSourceSubsIds | select -Unique
+    Write-Host "The following Subscriptions are identified in the Management Group hierarchy:" -ForegroundColor Magenta
+    $DataSourceSubsIds
     
 }else{
     Write-Host "Subscription is selected as data sources scope." -ForegroundColor Magenta
-    
     Get-AzSubscription | Format-table -Property Name, Id, tenantid, state
     write-host ""
     Write-host "Please provide the required information! " -ForegroundColor blue
@@ -230,44 +275,26 @@ if ($Scope -eq "1")
         
     } #end Do
     Until ($DataSub -in (Get-AzSubscription).Name)
-    Set-AzContext -Subscription $DataSub | Out-Null
     $DataSub = Select-AzSubscription -SubscriptionName $DataSub
-
-    #$tenantName = (Get-AzContext).Tenant
-    $DataSubContext = Get-AzContext
-    Write-Host "Subscription: $($DataSubContext.Subscription.Name) is selected" -ForegroundColor Magenta
+    Write-Host "Subscription: $($DataSub.Subscription.Name) is selected" -ForegroundColor Magenta
     write-host "`n"
-
-}
+    $DataSourceSubsIds.Add($DataSub.Subscription.id) 
+} 
 
 #If Azure SQL Database (AzureSQLDB) is selected for Azure Data Source
-If ($AzureDataType -eq "AzureSQLDB") {
+If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
 
     Write-Host ""
     Write-Host "Processing Azure SQL Servers..." -ForegroundColor Magenta
     Write-host ""
 
-    $DataSourceMGs = Get-AzManagementGroup 
-    foreach ($DataSourceMG in $DataSourceMGs) {
-
-        $DataSourceMG = Get-AzManagementGroup -GroupName $DataSourceMG.Name -Expand -Recurse
-        if ($DataSourceMG.Id.StartsWith($TopLMG.Id)) {
-            foreach ($DataSourceChildMG in $DataSourceMG.Children | Where-Object { $_.Type -eq "/subscriptions" }) {
-                $DataSourceChildMGSubId = $DataSourceChildMG.Id -replace '/subscriptions/',''
-                
-                If ($Scope -eq 1) {
-                    Write-Host "Processing Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
-                    
-                }else {
-                    #Write-Host "Processing Subscription:'$($DataSub.Name)'." -ForegroundColor Magenta
-                    $DataSourceChildMGSubId = $datasub.Subscription.Id
-                    $DataSourceChildMG.DisplayName = $DataSub.Subscription.Name
-                }            
-                
-                Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
+    foreach ($DataSourceSubId in $DataSourceSubsIds)
+    {             
+        $DataSub = Select-AzSubscription -SubscriptionId $DataSourceSubId 
+        Write-Host "Processing Subscription:'$($DataSub.Subscription.Name)' ID: '$($DataSub.Subscription.Id)'..." -ForegroundColor Magenta
                                             
                 $AzureSqlServers = Get-AzSqlServer
-                foreach ($AzureSqlServer in $yAzureSqlServers) {
+                foreach ($AzureSqlServer in $AzureSqlServers) {
 
                     Write-Host "Verifying SQL Server: '$($AzureSqlServer.ServerName)'... " -ForegroundColor Magenta
 
@@ -308,7 +335,7 @@ If ($AzureDataType -eq "AzureSQLDB") {
                                   
                     $AzSQLAADAdminConfigured = Get-AzSqlServerActiveDirectoryAdministrator -ServerName $AzureSqlServer.ServerName -ResourceGroup $AzureSqlServer.ResourceGroupName
                     Write-host "Please provide the required information! " -ForegroundColor blue 
-                    $AzSQLAADAdminPrompted =  $AzSQLMIAADAdminPrompted = (([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[0]
+                    $AzSQLAADAdminPrompted = (([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[0]
                     $AzSQLAADAdminPrompted = Get-AzureADUser -ObjectId $AzSQLAADAdminPrompted
                     $AzSQLAADAdminPromptedGroups = Get-AzureADUserMembership -ObjectId $AzSQLAADAdminPrompted.ObjectId  
 
@@ -369,42 +396,21 @@ If ($AzureDataType -eq "AzureSQLDB") {
                 }
             
                 Write-host "`n"
-                write-host "Readiness deployment completed for Azure SQL Servers in '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
+                write-host "Readiness deployment completed for Azure SQL Servers in '$($DataSub.Subscription.Name)'." -ForegroundColor Green
                 write-host "-".PadRight(98, "-") -ForegroundColor Green
                 Write-host "`n" 
             }
-            if ($Scope -eq 2) { break }    
-        }
-              
-    }
 }
 
-
 # If Azure SQL Managed Instance (AzureSQLMI) is selected for Azure Data Source
-If ($AzureDataType -eq "AzureSQLMI") {
+If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLMI")) {
     
     Write-Host "Processing Azure SQL Managed Instances ..." -ForegroundColor Magenta 
-       
-    $DataSourceMGs = Get-AzManagementGroup 
-    foreach ($DataSourceMG in $DataSourceMGs) {
-
-        $DataSourceMG = Get-AzManagementGroup -GroupName $DataSourceMG.Name -Expand -Recurse
-        if ($DataSourceMG.Id.StartsWith($TopLMG.Id)) {
-            foreach ($DataSourceChildMG in $DataSourceMG.Children | Where-Object { $_.Type -eq "/subscriptions" }) {
-                $DataSourceChildMGSubId = $DataSourceChildMG.Id -replace '/subscriptions/',''
-
-
-                If ($Scope -eq 1) {
-                    Write-Host "Processing Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
-                    
-                }else {
-                    #Write-Host "Processing Subscription:'$($DataSub.Name)'." -ForegroundColor Magenta
-                    $DataSourceChildMGSubId = $datasub.Subscription.Id
-                    $DataSourceChildMG.DisplayName = $DataSub.Subscription.Name
-                }            
-                
-                Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
-           
+    foreach ($DataSourceSubId in $DataSourceSubsIds)
+    {             
+        $DataSub = Select-AzSubscription -SubscriptionId $DataSourceSubId 
+        Write-Host "Processing Subscription:'$($DataSub.Subscription.Name)' ID: '$($DataSub.Subscription.Id)'..." -ForegroundColor Magenta
+        
                 $AzureSqlMIs = Get-AzSqlInstance
                 foreach ($AzureSqlMI in $AzureSqlMIs) {
                       
@@ -636,66 +642,67 @@ If ($AzureDataType -eq "AzureSQLMI") {
    
                     }                
                     Write-host "`n"
-                    write-host "Readiness deployment completed for Azure SQL Managed Instances in '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
+                    write-host "Readiness deployment completed for Azure SQL Managed Instances in '$($DataSub.Subscription.Name)'." -ForegroundColor Green
                     write-host "-".PadRight(98, "-") -ForegroundColor Green
                     Write-host "`n" 
                 }
-            if ($Scope -eq 2) { break } 
-        }   
-                
-    }
+   
 }
 
 # If Azure Storage Account (BlobStorage) or Azure Data Lake Gen 2 (ADLSGen2) is selected for Azure Data Source 
 
-If (($AzureDataType -eq "BlobStorage") -or ($AzureDataType -eq "ADLSGen2"))
+If (($AzureDataType -eq "all") -or ($AzureDataType -eq "BlobStorage") -or ($AzureDataType -eq "ADLSGen2"))
 {
     Write-Host "Processing RBAC assignments for Azure Purview Account $($PurviewAccount) for $AzureDataType ..." -ForegroundColor Magenta
     
     $ControlPlaneRole = "Reader"
     
-    #Check if Reader role is assigned at MG level
-    
-    $ExistingReaderRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $TopLMG.Id
-    
-    if (!$ExistingReaderRole) {
-        #Assign Reader role to Azure Purview at MG 
-        New-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $TopLMG.Id  
-        Write-Output "Azure RBAC 'Reader' role is now assigned to Azure Purview at the selected scope!"
-     }else {
-        Write-Output "Azure RBAC 'Reader' role is already assigned to Azure Purview at the selected scope. No action is needed." 
-     }
-    
+    If ($Scope -eq 1) #MG
+    {
+        #Check if Reader role is assigned at MG level
+        Write-Host "Processing RBAC assignments for Azure Purview Account $PurviewAccount for Storage Accounts inside '$($TopLMG.Name)' Management Group..." -ForegroundColor Magenta
+        $ExistingReaderRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $TopLMG.Id
+        if (!$ExistingReaderRole) {
+            #Assign Reader role to Azure Purview at MG 
+                New-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $TopLMG.Id  
+                Write-Output "Azure RBAC 'Reader' role is now assigned to Azure Purview at the selected scope!"
+        }else {
+            Write-Output "Azure RBAC 'Reader' role is already assigned to Azure Purview at the selected scope. No action is needed." 
+        } 
+    }else { #Sub
+        Write-Host "Processing RBAC assignments for Azure Purview Account $PurviewAccount for Storage Accounts inside '$($DataSub.Subscription.Name)' Subscription..." -ForegroundColor Magenta
+        $ExistingReaderRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole
+
+        if (!$ExistingReaderRole) {
+            #Assign Reader role to Azure Purview at Sub 
+            $RBACScope = "/subscriptions/" + $DataSub.Subscription.Id
+            New-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $RBACScope
+            Write-Output "Azure RBAC 'Reader' role is now assigned to Azure Purview at the selected scope!"
+        }else {
+            Write-Output "Azure RBAC 'Reader' role is already assigned to Azure Purview at the selected scope. No action is needed." 
+        }
+        
+    }
+  
     Write-Host ""
     $Role = "Storage Blob Data Reader"
 
-    $DataSourceMGs = Get-AzManagementGroup 
-    foreach ($DataSourceMG in $DataSourceMGs) {
-    
-        $DataSourceMG = Get-AzManagementGroup -GroupName $DataSourceMG.Name -Expand -Recurse
-        if ($DataSourceMG.Id.StartsWith($TopLMG.Id)) {
-            foreach ($DataSourceChildMG in $DataSourceMG.Children | Where-Object { $_.Type -eq "/subscriptions" }) {
-                $DataSourceChildMGSubId = $DataSourceChildMG.Id -replace '/subscriptions/',''
-
-                If ($Scope -eq 1) {
-                    Write-Host "Processing Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
-                    
-                }else {
-                    #Write-Host "Processing Subscription:'$($DataSub.Name)'." -ForegroundColor Magenta
-                    $DataSourceChildMGSubId = $datasub.Subscription.Id
-                    $DataSourceChildMG.DisplayName = $DataSub.Subscription.Name
-                }            
-                
-                Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
+   
+    foreach ($DataSourceSubId in $DataSourceSubsIds)
+    {             
+        $DataSub = Select-AzSubscription -SubscriptionId $DataSourceSubId 
+        Write-Host "Processing Subscription:'$($DataSub.Subscription.Name)' ID: '$($DataSub.Subscription.Id)'..." -ForegroundColor Magenta
+        $AzureSqlServers = Get-AzSqlServer       
 
                 #Verify whether RBAC is already assigned, otherwise assign RBAC
-                $ExistingRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $Role -Scope "/subscriptions/$DataSourceChildMGSubId"
+                $RBACScope = "/subscriptions/" + $DataSub.Subscription.Id
+                $ExistingRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $Role -Scope $RBACScope
                         
                 if (!$ExistingRole) {
-                   New-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $Role -Scope "/subscriptions/$DataSourceChildMGSubId"  
-                   Write-Output  "Azure RBAC 'Storage Blob Data Reader' role is now assigned to '$PurviewAccount' at '$($DataSourceChildMGSubId) Subscription'."
+                   New-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $Role -Scope $RBACScope  
+                   Write-Output  "Azure RBAC 'Storage Blob Data Reader' role is now assigned to '$PurviewAccount' at '$($DataSub.Subscription.Name)' Subscription'."
                 }else {
-                    Write-Output "Azure RBAC 'Storage Blob Data Reader' role is already assigned to '$PurviewAccount' at $DataSourceChildMGSubId Subscription. No action is needed." 
+                    Write-Output "Azure RBAC 'Storage Blob Data Reader' role is already assigned to '$PurviewAccount' at '$($DataSub.Subscription.Name)' Subscription. No action is needed." 
                 }
             
                 # Verify if VNet Integration is enabled on Azure Storage Accounts in the subscription AND 'Allow trusted Microsoft services to access this storage account' is not enabled
@@ -709,7 +716,7 @@ If (($AzureDataType -eq "BlobStorage") -or ($AzureDataType -eq "ADLSGen2"))
                     $StorageAccounts = Get-AzstorageAccount
                 }
                 Write-Host ""             
-                Write-Host "Verifying your Azure Storage Accounts Networks and Firewall Rules inside Azure Subscription: $DataSourceChildMGSubId ..." -ForegroundColor Magenta
+                Write-Host "Verifying your Azure Storage Accounts Networks and Firewall Rules inside Azure Subscription: '$($DataSub.Subscription.Name)'..." -ForegroundColor Magenta
                 write-host ""
                 foreach ($StorageAccount in $StorageAccounts) {
                     $StorageAccountNet = Get-AzStorageAccountNetworkRuleSet -ResourceGroupName $StorageAccount.ResourceGroupName -Name $StorageAccount.StorageAccountName
@@ -744,39 +751,23 @@ If (($AzureDataType -eq "BlobStorage") -or ($AzureDataType -eq "ADLSGen2"))
                 }
                    
                 Write-host "`n"
-                write-host "Readiness deployment completed for Storage Accounts in '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
+                write-host "Readiness deployment completed for Storage Accounts in '$($DataSub.Subscription.Name)'." -ForegroundColor Green
                 write-host "-".PadRight(98, "-") -ForegroundColor Green
                 Write-host "`n" 
             }
-            if ($Scope -eq 2) { break } 
-        }
-    }
+   
 }
 
 
 # If Azure Data Lake Gen 1 (ADLSGen1) is selected for Azure Data Source 
-If ($AzureDataType -eq "ADLSGen1") {
+If (($AzureDataType -eq "all") -or ($AzureDataType -eq "ADLSGen1")) {
     Write-Host "Processing Azure Data Lake Storage Gen 1..." -ForegroundColor Magenta
     Write-host ""
 
-    $DataSourceMGs = Get-AzManagementGroup 
-    foreach ($DataSourceMG in $DataSourceMGs) {
-    
-        $DataSourceMG = Get-AzManagementGroup -GroupName $DataSourceMG.Name -Expand -Recurse
-        if ($DataSourceMG.Id.StartsWith($TopLMG.Id)) {
-            foreach ($DataSourceChildMG in $DataSourceMG.Children | Where-Object { $_.Type -eq "/subscriptions" }) {
-                $DataSourceChildMGSubId = $DataSourceChildMG.Id -replace '/subscriptions/',''
-
-                If ($Scope -eq 1) {
-                    Write-Host "Processing Subscription:'$($DataSourceChildMG.DisplayName)' ID:$DataSourceChildMGSubId ..." -ForegroundColor Magenta
-                    
-                }else {
-                    #Write-Host "Processing Subscription:'$($DataSub.Name)'." -ForegroundColor Magenta
-                    $DataSourceChildMGSubId = $datasub.Subscription.Id
-                    $DataSourceChildMG.DisplayName = $DataSub.Subscription.Name
-                }            
-                
-                Select-AzSubscription -SubscriptionId $DataSourceChildMGSubId | Out-Null
+    foreach ($DataSourceSubId in $DataSourceSubsIds)
+    {             
+        $DataSub = Select-AzSubscription -SubscriptionId $DataSourceSubId 
+        Write-Host "Processing Subscription:'$($DataSub.Subscription.Name)' ID: '$($DataSub.Subscription.Id)'..." -ForegroundColor Magenta
 
                 Write-host ""
                 Write-Host "Verifying Azure Data Lake Storage Gen 1 Account' Network Rules and Permissions..." -ForegroundColor Magenta
@@ -842,14 +833,158 @@ If ($AzureDataType -eq "ADLSGen1") {
                     Write-host "`n"
                 } 
                 
-                write-host "Readiness deployment completed for Azure Data Lake Storage Gen 1 Accounts in '$($DataSourceChildMG.DisplayName)'." -ForegroundColor Green
+                write-host "Readiness deployment completed for Azure Data Lake Storage Gen 1 Accounts in '$($DataSub.Subscription.Name)'." -ForegroundColor Green
                 write-host "-".PadRight(98, "-") -ForegroundColor Green
                 Write-host "`n"                    
-            }  
-            if ($Scope -eq 2) { break }
-        }    
+            }   
+}
+
+# If Azure Synapse (Synapse) is selected for Azure Data Source 
+If (($AzureDataType -eq "all") -or ($AzureDataType -eq "Synapse")) {
+
+    Write-Host ""
+    Write-Host "Processing Azure Synapse..." -ForegroundColor Magenta
+    Write-host ""
+       
     
+        $ControlPlaneRole = "Reader"
+
+        If ($Scope -eq 1) #MG
+        {
+            #Check if Reader role is assigned at MG level
+            Write-Host "Processing RBAC assignments for Azure Purview Account $PurviewAccount for Storage Accounts inside '$($TopLMG.Name)' Management Group..." -ForegroundColor Magenta
+            $ExistingReaderRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $TopLMG.Id
+            if (!$ExistingReaderRole) {
+                #Assign Reader role to Azure Purview at MG 
+                    New-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $TopLMG.Id  
+                    Write-Output "Azure RBAC 'Reader' role is now assigned to Azure Purview at the selected scope!"
+            }else {
+                Write-Output "Azure RBAC 'Reader' role is already assigned to Azure Purview at the selected scope. No action is needed." 
+            } 
+        }else { #Sub
+            Write-Host "Processing RBAC assignments for Azure Purview Account $PurviewAccount for Storage Accounts inside '$($DataSub.Subscription.Name)' Subscription..." -ForegroundColor Magenta
+            $ExistingReaderRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole
     
-    }
+            if (!$ExistingReaderRole) {
+                #Assign Reader role to Azure Purview at Sub 
+                $RBACScope = "/subscriptions/" + $DataSub.Subscription.Id
+                New-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $RBACScope
+                Write-Output "Azure RBAC 'Reader' role is now assigned to Azure Purview at the selected scope!"
+            }else {
+                Write-Output "Azure RBAC 'Reader' role is already assigned to Azure Purview at the selected scope. No action is needed." 
+            }
+            
+        }
     
+    Write-Host ""
+    $Role = "Storage Blob Data Reader"
+
+    foreach ($DataSourceSubId in $DataSourceSubsIds)
+    {             
+        $DataSub = Select-AzSubscription -SubscriptionId $DataSourceSubId 
+        Write-Host "Processing Subscription:'$($DataSub.Subscription.Name)' ID: '$($DataSub.Subscription.Id)'..." -ForegroundColor Magenta
+        $AzureSqlServers = Get-AzSqlServer       
+
+        #Verify whether RBAC is assigned
+        $RBACScope = "/subscriptions/" + $DataSub.Subscription.Id
+        $ExistingRole = Get-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $Role -Scope $RBACScope
+                        
+        if (!$ExistingReaderRole) {
+            #Assign Reader role to Azure Purview at MG 
+                New-AzRoleAssignment -ObjectId $PurviewAccountMSI -RoleDefinitionName $ControlPlaneRole -Scope $TopLMG.Id  
+                Write-Output "Azure RBAC 'Reader' role is now assigned to Azure Purview at the selected scope!"
+        }else {
+            Write-Output "Azure RBAC 'Reader' role is already assigned to Azure Purview at the selected scope. No action is needed." 
+        }
+
+        $AzureSynapseWorkspaces = Get-AzSynapseWorkspace
+        foreach ($AzureSynapseWorkspace in $AzureSynapseWorkspaces) {
+
+            Write-Host "Verifying Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'... " -ForegroundColor Magenta
+
+            #Public and Private endpoint 
+            $PrivateEndPoints = Get-AzPrivateEndpointConnection -PrivateLinkResourceId $AzureSynapseWorkspace.Id -ErrorAction SilentlyContinue -ErrorVariable error2
+            if ($PrivateEndPoints.Count -ne 0) {
+                Write-Host "Awareness! Private Endpoints: '$($PrivateEndPoints.Name)' is configured on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'."
+            }else {
+                Write-Host "Awareness! Private Endpoint is not configured on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name), Verifying Firewall Rules...'."
+            }    
+            If ($AzureSynapseWorkspace.PublicNetworkAccess -like 'Enabled') {
+                #Public EndPoint enabled
+                Write-Output "Awareness! Public Endpoint is allowed on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'."
+                $AzureSynapseServerFw = Get-AzSynapseFirewallRule -WorkspaceName $AzureSynapseWorkspace.Name 
+                if (($AzureSynapseServerFw.FirewallRuleName -contains "AllowAllWindowsAzureIps") -or ($AzureSynapseServerFw.FirewallRuleName -contains "AllowAllAzureIPs"))
+                {
+                        Write-Output "'Allow Azure services and resources to access this server' is enabled on Azure Synapse: '$($AzureSynapseWorkspace.Name)' No action is needed." 
+                }else {
+                    
+                    #Azure IPs are not allowed to access Azure Synapse Workspace     
+                    Write-host ""
+                    Write-host "'Allow Azure services and resources to access this server' is not enabled on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'! Processing..." -ForegroundColor yellow    
+                    New-AzSynapseFirewallRule -ResourceGroupName $AzureSqlServer.ResourceGroupName -WorkspaceName $AzureSynapseWorkspace.Name -AllowAllAzureIPs
+                    Write-Output "'Allow Azure services and resources to access this server' is now enabled on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)' "        
+
+                }        
+            }
+                   
+            #Verify / Assign Azure AD Admin                   
+            $AzSynapseAADAdminConfigured = Get-AzSynapseSqlActiveDirectoryAdministrator -WorkspaceName $AzureSynapseWorkspace.Name 
+            
+            # Validate whether the sql admin user account exists
+            $AzSynapseAADAdminPrompted = ([System.Net.NetworkCredential]::new("", $AzSQLUserName).Password)
+            $AzSynapseAADAdminPrompted = Get-AzureADUser -ObjectId $AzSynapseAADAdminPrompted
+            $AzSynapseAADAdminPromptedGroups = Get-AzureADUserMembership -ObjectId $AzSynapseAADAdminPrompted.ObjectId  
+
+            If ($null -ne $AzSynapseAADAdminConfigured){
+
+                # Azure AD Authentucation is enabled on Azure Synapse Workspace
+                Write-Host "Verifying Azure AD Authentication on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)' ..." -ForegroundColor Magenta
+                  
+            }else {
+                        
+                # Azure AD Authentucation is not enabled on Azure Synapse Workspace
+                Write-Host "Azure AD Authentication is not enabled on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'! Processing..." -ForegroundColor yellow
+                            
+                # Set Azure AD Authentication on Azure Synapse Workspace
+                Set-AzSynapseSqlActiveDirectoryAdministrator -WorkspaceName $AzureSynapseWorkspace.Name -ResourceGroupName $AzureSqlServer.ResourceGroupName -DisplayName $AzSynapseAADAdminPrompted.DisplayName
+                Write-Output "Azure AD Authentication is now enabled for user: '$($AzSynapseAADAdminPrompted.DisplayName)' on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'."
+                $AzSynapseAADAdminConfigured = Get-AzSynapseSqlActiveDirectoryAdministrator -WorkspaceName $AzureSynapseWorkspace.Name 
+      
+            }    
+            #Assign SQL db_datareader Role to Azure Purview MSI on each Azure Synapse Dedicated Pool 
+            $AzureSynapsePools = Get-AzSynapseSqlPool -WorkspaceName $AzureSynapseWorkspace.Name
+            foreach ($AzureSynapsePool in $AzureSynapsePools) {
+              
+                                           
+                    #Validate if the provided admin user is actually configured as AAD Admin in Azure Synapse Workspace
+                    If (($AzSynapseAADAdminConfigured.DisplayName -eq $AzSynapseAADAdminPrompted.DisplayName) -OR ($AzSynapseAADAdminPromptedGroups.ForEach({$_.ObjectId}) -contains $AzSynapseAADAdminConfigured.ObjectId))
+                        {
+
+                            sqlcmd -S $AzureSynapseWorkspace.ConnectivityEndpoints.sql -d $AzureSynapsePool.SqlPoolName -I -U (([System.Net.NetworkCredential]::new("", $AzSQLUserName).Password)) -P (([System.Net.NetworkCredential]::new("", $AzSQLPassword).Password)) -G -Q "CREATE USER [$PurviewAccount] FROM EXTERNAL PROVIDER; EXEC sp_addrolemember 'db_datareader', [$PurviewAccount];"
+                            Write-Output "Azure SQL DB: db_datareader role is now assigned to $PurviewAccount in '$($AzureSynapsePool.SqlPoolName)' on Azure Synapse Workspace '$($AzureSynapseWorkspace.Name)'."
+
+                        }else {    
+                            Write-Output "'$($AzSynapseAADAdminPrompted.UserPrincipalName)' is not Admin in Azure Synapse Workspace:'$($AzureSynapseWorkspace.Name)'. '$($AzSynapseAADAdminConfigured.DisplayName)' is found as SQL Server Admin on Azure AD Authentication configuration on the server."
+                               
+                            Write-host "Please provide the required information! " -ForegroundColor blue
+                            $AzSynapseAADAdminPrompted = Read-Host -Prompt "Enter your Azure Synapse Workspace Administrator account that is Azure AD Integrated or press Enter to skip"
+                            if (!$AzSynapseAADAdminPrompted) { 
+                                Write-Host "Skipping '$($AzureSynapseWorkspace.Name)'. Azure Purview will not be able to scan this Azure Synapse Workspace!" -ForegroundColor Red 
+                            }else{
+                                $AzSynapseAADAdminPrompted = Get-AzureADUser -ObjectId $AzSynapseAADAdminPrompted
+                                sqlcmd -S $AzureSynapseWorkspace.ConnectivityEndpoints.sql -d $AzureSynapsePool.SqlPoolName -I -U $AzSynapseAADAdminPrompted.UserPrincipalName -G -Q "CREATE USER [$PurviewAccount] FROM EXTERNAL PROVIDER; EXEC sp_addrolemember 'db_datareader', [$PurviewAccount];"
+                                
+                                Write-Output "Azure SQL DB: db_datareader role is now assigned to $PurviewAccount in '$($AzureSynapsePool.SqlPoolName)' on Azure Synapse Workspace '$($AzureSynapseWorkspace.Name)'."
+                            }   
+                        }
+                             
+            } 
+                                
+            write-host ""
+        }  
+        Write-host "`n"
+        write-host "Readiness deployment completed for Azure Synapse in '$($DataSub.Subscription.Name)'." -ForegroundColor Green
+        write-host "-".PadRight(98, "-") -ForegroundColor Green
+        Write-host "`n" 
+    }  
 }
