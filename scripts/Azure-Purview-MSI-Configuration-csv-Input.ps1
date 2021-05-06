@@ -123,7 +123,7 @@ All             for all the above data sources
 Write-Host "'$AzureDataType' is selected as Data Source." -ForegroundColor Magenta
 
 
-<#Clear any possible cached credentials for other subscriptions
+#Clear any possible cached credentials for other subscriptions
 Clear-AzContext
 
 #Login to Azure AD 
@@ -133,10 +133,8 @@ Connect-AzureAD
 #Authentication to Azure 
 Write-Host "Please sign in with your Azure administrator credentials:"
 Login-AzAccount
-#>
 
 #Purview subscription 
-
 $PurviewSubContext = Set-AzContext -Subscription $PurviewSub 
 Write-Host "Subscription: '$($PurviewSubContext.Subscription.Name)' is selected where Azure Purview Account is deployed." -ForegroundColor Magenta
 

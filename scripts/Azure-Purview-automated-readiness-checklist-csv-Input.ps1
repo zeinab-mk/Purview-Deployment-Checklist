@@ -30,7 +30,7 @@ PRE-REQUISITES:
     4.2 For ADLSGen1 and ADLSGen2: Reader on data sources' subscription or Management Group
     4.3 For AzureSQLDB: Read Key Vault and have access to get/list Azure Key Vault secret where Azure SQL Admin credentials are stored.  
     4.4 For AzureSQLMI: Read Key Vault and have access to get/list Azure Key Vault secret where Azure SQL Admin credentials are stored.
-    4.5 Azure Synapse: Read Key Vault and have access to get/list Azure Key Vault secret where Azure Synapse Admin credentials are stored.
+    4.5 For Azure Synapse: Read Key Vault and have access to get/list Azure Key Vault secret where Azure Synapse Admin credentials are stored.
     4.6 Azure Reader role on data source subscription. 
     4.7 Azure AD (at least Global Reader) to read Azure AD users and Groups. 
 
@@ -70,7 +70,7 @@ Execute this script by providing the following parameters:
 
     3. PurviewAccount: Your existing Azure Purview Account resource name.
 
-    4. -PurviewSub: Subscription ID where Azure Purview Account is deployed.
+    4. PurviewSub: Subscription ID where Azure Purview Account is deployed.
 
 
 .NOTES
@@ -133,7 +133,7 @@ All             for all the above data sources
 
 Write-Host "'$AzureDataType' is selected as Data Source." -ForegroundColor Magenta
 
-<#Clear any possible cached credentials for other subscriptions
+Clear any possible cached credentials for other subscriptions
 Clear-AzContext
 
 #Login to Azure AD 
@@ -143,7 +143,7 @@ Connect-AzureAD
 #Authentication to Azure 
 Login-AzAccount
 Write-Host "Please sign in with your Azure administrator credentials:"
-#>
+
 #Az Context
 $PurviewSubContext = Set-AzContext -Subscription $PurviewSub 
 Write-Host "Subscription: '$($PurviewSubContext.Subscription.Name)' is selected where Azure Purview Account is deployed." -ForegroundColor Magenta

@@ -104,7 +104,7 @@ Until ($AzureDataType -in "BlobStorage", "AzureSQLMI", "AzureSQLDB", "ADLSGen2",
 Write-Host "$AzureDataType is selected as Data Source." -ForegroundColor Magenta
 
 
-<#Clear any possible cached credentials for other subscriptions
+#Clear any possible cached credentials for other subscriptions
 Clear-AzContext
 
 #Login to Azure AD 
@@ -116,7 +116,7 @@ Connect-AzureAD
 
 Login-AzAccount
 Write-Host "Please sign in with your Azure administrator credentials:"
-#>
+
 
 #List subscriptions
 Get-AzSubscription | Format-table -Property Name, Id, tenantid, state

@@ -30,7 +30,7 @@ PRE-REQUISITES:
     4.2 For ADLSGen1 and ADLSGen2: Reader on data sources' subscription or Management Group
     4.3 For AzureSQLDB: Azure SQL Admin user (Authentication method: Azure Active Directory Authentication) 
     4.4 For AzureSQLMI: Azure SQL Managed Identity Admin user (Authentication method: Azure Active Directory Authentication)
-    4.5 Azure Synapse: Read Key Vault and have access to get/list Azure Key Vault secret where Azure Synapse Admin credentials are stored.
+    4.5 For Azure Synapse: Read Key Vault and have access to get/list Azure Key Vault secret where Azure Synapse Admin credentials are stored.
     4.6 Azure AD (at least Global Reader) to read Azure AD users and Groups.
     4.7 Azure Reader role on data source subscription. 
 
@@ -104,8 +104,7 @@ Until ($AzureDataType -in "BlobStorage", "ADLSGen2", "ADLSGen1", "AzureSQLDB", "
 
 Write-Host "$AzureDataType is selected as Data Source." -ForegroundColor Magenta
 
-
-<#Clear any possible cached credentials for other subscriptions
+#Clear any possible cached credentials for other subscriptions
 Clear-AzContext
 
 #Login to Azure AD 
@@ -116,7 +115,7 @@ Connect-AzureAD
 
 Login-AzAccount
 Write-Host "Please sign in with your Azure administrator credentials:"
-#>
+
 
 #List subscriptions
 Get-AzSubscription | Format-table -Property Name, Id, tenantid, state
