@@ -61,8 +61,8 @@ Following these steps will help better prepare your environment for data governa
   * Review and update Azure Policy assigned to Purview subscriptions to allow deployment of Azure Storage, EventHub Namespace and Purview Accounts.
   * Deploy Azure Purview Accounts for production and non-production environments.
   * If Azure Purview MSI used: assign required RBAC roles to Azure Purview MSI.
-  * If Key Vault used, assign the [required access](https://docs.microsoft.com/en-us/azure/purview/manage-credentials) to key vault secrets to Azure Purview Account’s MSI.
-  * Create Credentials and map to Key Vault’s secrets in Azure Purview.
+  * If Key Vault used, assign the [required access](https://docs.microsoft.com/en-us/azure/purview/manage-credentials) to key vault secrets to Azure Purview Account's MSI.
+  * Create Credentials and map to Key Vault's secrets in Azure Purview.
   * Register Application and configure service principals if SP is used.
   * Generate and Register Integration Runtime for data sources inside IaaS or on-premises VMs.
 
