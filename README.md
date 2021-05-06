@@ -46,15 +46,15 @@ Use any of the following **PowerShell-based scripts** to validate your data sour
 |[Azure-Purview-automated-readiness-checklist.ps1](https://github.com/zeinab-mk/Purview-Deployment-Checklist/blob/main/scripts/Azure-Purview-automated-readiness-checklist.ps1) |<ul><li>Possibility to run the script on a Top-level Management Group or a Subscription as data source scope</li><li>Validates if Azure Purview Managed Identity has access to data sources on both network access and authorization</li><li>Missing configurations are listed as output report</li></ul> |<ul><li>An Azure Purview Account</li><li>Powershell Az Module</li><li>Powershell AzureAD Module</li><li>Powershell Az.Synapse Module</li><li>SQLCMD</li></ul> |<ul><li>Contributor on Azure Purview Resource Group</li><li>Reader at data source Subscription or Management Group </li><li>Get/List Key Vault secret</li><li>Azure AD Global Reader</li></ul> |
 |[Azure-Purview-automated-readiness-checklist-csv-Input.ps1](https://github.com/zeinab-mk/Purview-Deployment-Checklist/blob/main/scripts/Azure-Purview-automated-readiness-checklist-csv-Input.ps1) |<ul><li>Possibility to run the script over data sources in multiple subscriptions using a csv list as input </li><li>Validates if Azure Purview Managed Identity has access to data sources on both network access and authorization</li><li>Missing configurations are listed as output report</li><li>Reduced prompts when running the script</li></ul> |<ul><li>An Azure Purview Account</li><li>Powershell Az Module</li><li>Powershell AzureAD Module</li><li>Powershell Az.Synapse Module</li><li>SQLCMD</li></ul> |<ul><li>Contributor on Azure Purview Resource Group</li><li>Reader at data source Subscription or Management Group </li><li>Get/List Key Vault secret</li><li>Azure AD Global Reader</li></ul>|
 
-## 2.1. Core Capabilities 
+### 2.1. Core Capabilities 
 
-### 2.1.1. Azure Purview Authentication type
+#### 2.1.1. Azure Purview Authentication type
 
 To scan data sources, Azure Purview requires access registered data sources. This is done by using **Credentials**. A credential is an authentication information that Azure Purview can use to authenticate to your registered data sources. There are few options to setup the credentials for Azure Purview such as using Managed Identity assigned to the Purview Account, using a Key Vault or a Service Principals.
 
 The automated readiness checklist currently is supported for **Managed Identity**.
 
-### 2.1.2. Data Sources types
+#### 2.1.2. Data Sources types
 
 Currently, the following **data sources** are supported in the script:
 
@@ -122,11 +122,11 @@ You can choose **all** or any of these data sources as input when running the sc
 - SQL Databases:
   - SQL Role: Check if Azure Purview MSI has db_datareader role.
 
-### 2.1.3. Data Sources Scopes
+#### 2.1.3. Data Sources Scopes
 
 As your data sources scope, you can select a top-level **Management Group** a **Subscription** or use a csv file which contains subset of your Subscriptions. If you select a Management Group, the readiness check script will run on all subscriptions inside the Management Group including child Management Groups. If you select Subscriptions as data source scope, the script will only run on the resources in selected subscriptions.
 
-## 2.2. Prerequisites
+### 2.2. Prerequisites
 
 The following prerequisites are required to successfully run the script:
 
@@ -135,7 +135,7 @@ The following prerequisites are required to successfully run the script:
 - Access to Azure AD and Azure Subscriptions where Azure Purview account and data sources are deployed.
 - if csv file is used, a valid user's credential must be configured inside key Vault's secrets in each subscriptions. The script will use these credentials to validate Azure Purview access to Azure SQL Servers, Azure Synapse or Azure SQL Managed Instances.
 
-## 2.2.1. Required Permissions
+#### 2.2.1. Required Permissions
 
 The following permissions (minimum) are needed run the script in your Azure environment:
 Role | Scope |
@@ -146,17 +146,17 @@ Role | Scope |
 | SQL Admin (Azure AD Authentication) | Azure SQL Servers or Azure SQL Managed Instances |
 | Access to your Azure Key Vault | Access to get/list Key Vault's secret for Azure SQL DB, SQL MI or Synapse authentication |  
 
-## 2.2.2 Required Modules
+#### 2.2.2 Required Modules
 
 This script requires Azure PowerShell [Az](https://docs.microsoft.com/en-us/powershell/azure/new-azureps-module-az?view=azps-5.8.0) Modules.
 
-## 2.3. How to run the scripts?
+### 2.3. How to run the scripts?
 
 Use the steps in the following examples to run the script:  
 
-## 2.3.1. Azure-Purview-automated-readiness-checklist.ps1
+#### 2.3.1. Azure-Purview-automated-readiness-checklist
 
-1. Run the script using a PowerShell console and select any of the desired options as data source types.
+1. Run the [Azure-Purview-automated-readiness-checklist.ps1](https://github.com/zeinab-mk/Purview-Deployment-Checklist/blob/main/scripts/Azure-Purview-automated-readiness-checklist.ps1) script using a PowerShell console and select any of the desired options as data source types.
 2. Type "y" to clear context.
 3. Sign in to Azure AD and Azure when prompted.
 4. Type Azure subscription name of your Azure Purview Account.
@@ -165,7 +165,7 @@ Use the steps in the following examples to run the script:
 7. Type Management Group or Subscription Name.
 8. Review the output report.
 
-## 2.3.2. Azure-Purview-automated-readiness-checklist-csv-Input.ps1
+#### 2.3.2. Azure-Purview-automated-readiness-checklist-csv-Input
 
 1. Create a csv file (e.g. "C:\Temp\Subscriptions.csv) with 4 columns:
     a. Column name: SubscriptionId
@@ -186,7 +186,7 @@ Use the steps in the following examples to run the script:
 
         Note: Before running this script update the file name / path further in the code, if needed.
 
-2. Run the script using a PowerShell console providing the following parameters:
+2. Run the [Azure-Purview-automated-readiness-checklist-csv-Input.ps1](https://github.com/zeinab-mk/Purview-Deployment-Checklist/blob/main/scripts/Azure-Purview-automated-readiness-checklist-csv-Input.ps1) script using a PowerShell console providing the following parameters:
    a. AzureDataType: as data source type, use any of the following options:
 
         "BlobStorage"
@@ -226,13 +226,13 @@ Use any of the following **PowerShell-based scripts** to validate your data sour
 
 <br>
 
-## 3.1. Core Capabilities 
+### 3.1. Core Capabilities
 
-### 3.1.1. Authentication type
+#### 3.1.1. Authentication type
 
 Azure Purview Managed Identity. One benefit of using Managed Identity for Azure Purview is that if you are using the Purview Managed Identity to set up scans, you will not have to explicitly create a credential and link your key vault to Purview to store them, however you still need to assign access to Purview MSI across your data sources and make sure data sources are reachable.
 
-### 3.1.2. Data Sources types
+#### 3.1.2. Data Sources types
 
 Currently, the following **data sources** are supported in this script:
 
@@ -297,11 +297,11 @@ This script can help you to automatically:
 - SQL Databases:
   - SQL Role: Assign Azure Purview MSI with db_datareader role.
 
-### 3.1.3. Data Sources Scopes
+#### 3.1.3. Data Sources Scopes
 
 As your data sources scope, you can select a top-level **Management Group** a **Subscription** or use a csv file which contains subset of your Subscriptions. If you select a Management Group, the readiness check script will run on all subscriptions inside the Management Group including child Management Groups. If you select Subscriptions as data source scope, the script will only run on the resources in selected subscriptions.
 
-## 2.2. Prerequisites
+### 3.2. Prerequisites
 
 The following prerequisites are required to successfully run the script:
 
@@ -310,7 +310,7 @@ The following prerequisites are required to successfully run the script:
 - Access to Azure AD and Azure Subscriptions where Azure Purview account and data sources are deployed.
 - if csv file is used, a valid user's credential must be configured inside key Vault's secrets in each subscriptions. The script will configure Azure Ad Authentication using these credentials for Azure SQL Servers, Azure Synapse or Azure SQL Managed Instances.
 
-## 3.2. Required Permissions
+#### 3.2.1 Required Permissions
 
 The following permissions (minimum) are needed run the script in your Azure environment:
 Role | Scope | Why is needed? |
@@ -323,17 +323,17 @@ Role | Scope | Why is needed? |
 | SQL Admin (Azure AD Authentication) | Azure SQL Servers or Azure SQL Managed Instances | To assign db_datareader role to Azure Purview |
 | Access to your Azure Key Vault | Access to get/list Key Vault's secret for Azure SQL DB, SQL MI or Synapse authentication |  
 
-## 3.3 Required Modules
+#### 3.2.2 Required Modules
 
 This script requires Azure PowerShell [Az](https://docs.microsoft.com/en-us/powershell/azure/new-azureps-module-az?view=azps-5.8.0) Modules.
 
-## 3.5. How to run the scripts?
+### 3.3. How to run the scripts?
 
 Use the steps in the following examples to run the script:  
 
-## 3.5.1 Azure-Purview-automated-readiness-checklist.ps1
+#### 3.3.1 Azure-Purview-MSI-Configuration
 
-1. Run the script using a PowerShell console and select any of the desired options as data source types.
+1. Run the [Azure-Purview-MSI-Configuration.ps1](https://github.com/zeinab-mk/Purview-Deployment-Checklist/blob/main/scripts/Azure-Purview-MSI-Configuration.ps1) script using a PowerShell console and select any of the desired options as data source types.
 2. Type "y" to clear context.
 3. Sign in to Azure AD and Azure when prompted.
 4. Type Azure subscription name of your Azure Purview Account.
@@ -343,7 +343,7 @@ Use the steps in the following examples to run the script:
 8. When prompted, provide required information to configure access management or network configuration over the data sources and defined scope.
 9. Review the output report.
 
-## 3.5.2 Azure-Purview-automated-readiness-checklist-csv-Input.ps1
+#### 3.3.2 Azure-Purview-MSI-Configuration-csv-Input.ps1
 
 1. Create a csv file (e.g. "C:\Temp\Subscriptions.csv) with 4 columns:
     a. Column name: SubscriptionId
@@ -364,7 +364,7 @@ Use the steps in the following examples to run the script:
 
         Note: Before running this script update the file name / path further in the code, if needed.
 
-2. Run the script using a PowerShell console providing the following parameters:
+2. Run the [Azure-Purview-MSI-Configuration-csv-Input.ps1](https://github.com/zeinab-mk/Purview-Deployment-Checklist/blob/main/scripts/Azure-Purview-MSI-Configuration-csv-Input.ps1) script using a PowerShell console providing the following parameters:
    a. AzureDataType: as data source type, use any of the following options:
 
         "BlobStorage"
