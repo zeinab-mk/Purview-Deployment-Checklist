@@ -1,9 +1,9 @@
 ---
 title: Azure Purview Readiness Checklist
 description: Azure Purview Readiness Checklist
-ms.author: Zeinab Mokhtarian Koorabbasloo
-ms.date: 03/24/2021
-ms.file: Azure-Purview-Deployment-Readiness-Checklist.md
+author: Zeinab Mokhtarian Koorabbasloo
+date: 03/24/2021
+file: Azure-Purview-Deployment-Readiness-Checklist.md
 ---
 
 | Update: 03/24/2021

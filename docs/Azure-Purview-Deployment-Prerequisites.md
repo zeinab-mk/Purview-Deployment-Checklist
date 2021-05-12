@@ -1,9 +1,9 @@
 ---
 title: Azure Purview Deployment Prerequisites
 description: Azure Purview Deployment Prerequisites
-ms.author: Zeinab Mokhtarian Koorabbasloo
-ms.date: 05/12/2021
-ms.file: Azure-Purview-Deployment-Prerequisites.md
+author: Zeinab Mokhtarian Koorabbasloo
+date: 05/12/2021
+file: Azure-Purview-Deployment-Prerequisites.md
 ---
 
 | Update: 05/12/2021
