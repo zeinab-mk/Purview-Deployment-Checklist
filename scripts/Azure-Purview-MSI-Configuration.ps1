@@ -1,6 +1,6 @@
-#requires -version 5.1
+<#requires -version 5.1
 #requires -RunAsAdministrator
-##requires -Module Az
+##requires -Module Az#>
 
 <#
 .SYNOPSIS
@@ -173,7 +173,12 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB") -or ($Azure
         Write-host "Please provide the required information! Enter Azure AD Admin's username and password to login to Azure SQL Servers:" -ForegroundColor blue
         $cred = Get-Credential
         $SecretString = ConvertTo-SecureString -AsPlainText -Force -String ($Cred.UserName + "`v" + $Cred.GetNetworkCredential().Password)
-        
+        $AzSQLCreds = Set-AzKeyVaultSecret -Name "AzSQLCreds" -VaultName $PurviewKV.VaultName -SecretValue $SecretString -ContentType 'PSCredential'      
+        $AzSQLCreds = $AzSQLCreds.SecretValue
+
+    }else{
+        $AzSQLCreds = Get-AzKeyVaultSecret -Name $AzSQLCreds.Name -VaultName $PurviewKV.VaultName
+        $AzSQLCreds = $AzSQLCreds.SecretValue
     }
         
     $PurviewKVAccessPolicy = @{
@@ -184,8 +189,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB") -or ($Azure
         
     }
     Set-AzKeyVaultAccessPolicy @PurviewKVAccessPolicy
-    $AzSQLCreds = Set-AzKeyVaultSecret -Name "AzSQLCreds" -VaultName $PurviewKV.VaultName -SecretValue $SecretString -ContentType 'PSCredential'
-    $AzSQLCreds = $AzSQLCreds.SecretValue
+ 
 }
 
 <## List MGs
@@ -214,7 +218,7 @@ Do
 }  #end Do
 Until ($Scope -in "1","2")
 
-$DataSourceSubsIds.clear()
+if ($null -ne $DataSourceSubsIds) { $DataSourceSubsIds.clear() } 
 $DataSourceSubsIds = [System.Collections.ArrayList]::new()
 
 if ($Scope -eq "1") 
@@ -368,7 +372,8 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
                         if ($AzureSQLDB.DatabaseName -ne "master") {
                                              
                             #Validate if the provided admin user is actually configured as AAD Admin in Azure SQL Server
-                            If (($AzSQLAADAdminConfigured.DisplayName -eq $AzSQLAADAdminPrompted.DisplayName) -OR ($AzSQLAADAdminPromptedGroups.ForEach({$_.ObjectId}) -contains $AzSQLAADAdminConfigured.ObjectId))
+                          
+                            If (($AzSQLAADAdminConfigured.DisplayName -eq $AzSQLAADAdminPrompted.DisplayName) -OR ($AzSQLAADAdminConfigured.DisplayName -eq $AzSQLAADAdminPrompted.UserPrincipalName) -OR ($AzSQLAADAdminPromptedGroups.ForEach({$_.ObjectId}) -contains $AzSQLAADAdminConfigured.ObjectId))
 
                             {
 

@@ -1,6 +1,6 @@
-#requires -version 5.1
+<#requires -version 5.1
 #requires -RunAsAdministrator
-##requires -Module Az
+##requires -Module Az#>
 
 <#
 .SYNOPSIS
@@ -140,11 +140,12 @@ write-host "`n"
 Write-host "Please provide the required information! " -ForegroundColor blue
 
 $PurviewAccount = Read-Host -Prompt "Enter the name of your Azure Purview Account"
-$Purviewlocation = (Get-AzResource -Name $PurviewAccount).Location
 
 $PurviewAccountMSI = (Get-AzResource -Name $PurviewAccount).Identity.PrincipalId
 If ($null -ne $PurviewAccountMSI) {
     Write-Host "Azure Purview Account $($PurviewAccount) is selected" -ForegroundColor Magenta
+    $Purviewlocation = (Get-AzResource -Name $PurviewAccount).Location
+
 }else {
     Write-Host "There is no Managed Identity for Azure Purview Account $($PurviewAccount)! Terminating..." -ForegroundColor red
     Break
@@ -163,7 +164,7 @@ Do
 }  #end Do
 Until ($Scope -in "1","2")
 
-$DataSourceSubsIds.clear()
+if ($null -ne $DataSourceSubsIds) { $DataSourceSubsIds.clear() } 
 $DataSourceSubsIds = [System.Collections.ArrayList]::new()
 
 if ($Scope -eq "1") 
@@ -255,21 +256,23 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB") -or ($Azure
         Write-host "Please provide the required information! Enter Azure AD Admin's username and password to login to Azure SQL Servers:" -ForegroundColor blue
         $cred = Get-Credential
         $SecretString = ConvertTo-SecureString -AsPlainText -Force -String ($Cred.UserName + "`v" + $Cred.GetNetworkCredential().Password)
-        
-    }
-        
-        $PurviewKVAccessPolicy = @{
-            ObjectId                  = $PurviewAccountMSI
-            VaultName                 = $PurviewKV.VaultName
-            ResourceGroupName         = $PurviewKV.ResourceGroupName
-            PermissionsToSecrets      = @('Get','List')
-        
-        }
-        Set-AzKeyVaultAccessPolicy @PurviewKVAccessPolicy
         $AzSQLCreds = Set-AzKeyVaultSecret -Name "AzSQLCreds" -VaultName $PurviewKV.VaultName -SecretValue $SecretString -ContentType 'PSCredential'
         $AzSQLCreds = $AzSQLCreds.SecretValue
+    }else {
+        $AzSQLCreds = Get-AzKeyVaultSecret -Name $AzSQLCreds.Name -VaultName $PurviewKV.VaultName
+        $AzSQLCreds = $AzSQLCreds.SecretValue
+    }
+    
+    $PurviewKVAccessPolicy = @{
+        ObjectId                  = $PurviewAccountMSI
+        VaultName                 = $PurviewKV.VaultName
+        ResourceGroupName         = $PurviewKV.ResourceGroupName
+        PermissionsToSecrets      = @('Get','List')
+    }
+    
+    Set-AzKeyVaultAccessPolicy @PurviewKVAccessPolicy
+    
 }
-
 #If Azure SQL Database (AzureSQLDB) is selected for Azure Data Sources
 If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
     Write-Host ""
@@ -335,6 +338,7 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "AzureSQLDB")) {
                           
                         Write-Host "`n"
                         Write-Host "Connecting to '$($AzureSQLDB.DatabaseName)' on Azure SQL Server: '$($AzureSqlServer.ServerName)'..." -ForegroundColor Magenta
+                        
                         
                         $AzurePurviewMSISQLRole = sqlcmd -S $AzureSqlServer.FullyQualifiedDomainName -d $AzureSQLDB.DatabaseName -U ((([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[0]) -P ((([System.Net.NetworkCredential]::new("", $AzSQLCreds).Password) -Split "`v")[1]) -G -Q "SELECT r.name role_principal_name FROM sys.database_role_members rm JOIN sys.database_principals r ON rm.role_principal_id = r.principal_id JOIN sys.database_principals m ON rm.member_principal_id = m.principal_id where m.name = '$PurviewAccount'"
 
