@@ -756,23 +756,25 @@ If (($AzureDataType -eq "all") -or ($AzureDataType -eq "Synapse")) {
             }else {
                 Write-Host "Awareness! Private Endpoint is not configured on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name), Verifying Firewall Rules...'."
             }    
-            If ($AzureSynapseWorkspace.PublicNetworkAccess -like 'Enabled') {
-                #Public EndPoint enabled
-                Write-Output "Awareness! Public Endpoint is allowed on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'."
-                $AzureSynapseServerFw = Get-AzSynapseFirewallRule -WorkspaceName $AzureSynapseWorkspace.Name 
-                if (($AzureSynapseServerFw.FirewallRuleName -contains "AllowAllWindowsAzureIps") -or ($AzureSynapseServerFw.FirewallRuleName -contains "AllowAllAzureIPs"))
+            
+            $missingfwrule = $null
+            $AzureSynapseServerFwRules = Get-AzSynapseFirewallRule -WorkspaceName $AzureSynapseWorkspace.Name 
+            foreach ($AzureSynapseServerFwRule in $AzureSynapseServerFwRules) {
+                if (($AzureSynapseServerFwRule.StartIpAddress -contains "0.0.0.0" ) -or $AzureSynapseServerFwRule.EndIpAddress -contains "0.0.0.0")
                 {
-                        Write-Output "'Allow Azure services and resources to access this server' is enabled on Azure Synapse: '$($AzureSynapseWorkspace.Name)' No action is needed." 
-                }else {
-                    
+                    $missingfwrule = 1  
+                    break
+
+                }   
+            }
+            if ($null -eq $missingfwrule) 
+                {
                     #Azure IPs are not allowed to access Azure Synapse Workspace     
                     Write-host ""
                     Write-host "'Allow Azure services and resources to access this server' is not enabled on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)'! Processing..." -ForegroundColor yellow    
-                    New-AzSynapseFirewallRule -ResourceGroupName $AzureSqlServer.ResourceGroupName -WorkspaceName $AzureSynapseWorkspace.Name -AllowAllAzureIPs
-                    Write-Output "'Allow Azure services and resources to access this server' is now enabled on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)' "        
-
-                }        
-            }
+                    New-AzSynapseFirewallRule -WorkspaceName $AzureSynapseWorkspace.Name -Name "AllowAllWindowsAzureIps" -StartIpAddress "0.0.0.0" -EndIpAddress "0.0.0.0"
+                    Write-Output "'Allow Azure services and resources to access this server' is now enabled on Azure Synapse Workspace: '$($AzureSynapseWorkspace.Name)' "         
+            }    
                    
             #Verify / Assign Azure AD Admin                   
             $AzSynapseAADAdminConfigured = Get-AzSynapseSqlActiveDirectoryAdministrator -WorkspaceName $AzureSynapseWorkspace.Name 
