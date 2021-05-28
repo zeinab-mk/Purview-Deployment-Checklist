@@ -50,7 +50,7 @@ Use any of the following **PowerShell-based scripts** to validate your data sour
 
 #### 2.1.1. Azure Purview Authentication type
 
-To scan data sources, Azure Purview requires access registered data sources. This is done by using **Credentials**. A credential is an authentication information that Azure Purview can use to authenticate to your registered data sources. There are few options to setup the credentials for Azure Purview such as using Managed Identity assigned to the Purview Account, using a Key Vault or a Service Principals.
+To scan data sources, Azure Purview requires access to data sources. This is done by using **Credentials**. A credential is an authentication information that Azure Purview can use to authenticate to your registered data sources. There are few options to setup the credentials for Azure Purview such as using Managed Identity assigned to the Purview Account, using a Key Vault or a Service Principals.
 
 The automated readiness checklist currently is supported for **Managed Identity**.
 
@@ -58,7 +58,7 @@ The automated readiness checklist currently is supported for **Managed Identity*
 
 Currently, the following **data sources** are supported in the script:
 
-- Azure Blob Storage (BlobStorge)
+- Azure Blob Storage (BlobStorage)
 - Azure Data Lake Storage Gen 2 (ADLSGen2)
 - Azure Data Lake Storage Gen 1 (ADLSGen1)
 - Azure SQL Database (AzureSQLDB)
@@ -67,7 +67,7 @@ Currently, the following **data sources** are supported in the script:
 
 You can choose **all** or any of these data sources as input when running the script.
 
-**Azure Blob Storage (BlobStorge):**
+**Azure Blob Storage (BlobStorage):**
 
 - RBAC: Verify if Azure Purview MSI has 'Storage Blob Data Reader role' in each of the subscriptions below the selected scope.
 - RBAC: Verify if Azure Purview MSI has 'Reader' role on selected scope.
@@ -236,7 +236,7 @@ Azure Purview Managed Identity. One benefit of using Managed Identity for Azure 
 
 Currently, the following **data sources** are supported in this script:
 
-- Azure Blob Storage (BlobStorge)
+- Azure Blob Storage (BlobStorage)
 - Azure Data Lake Storage Gen 2 (ADLSGen2)
 - Azure Data Lake Storage Gen 1 (ADLSGen1)
 - Azure SQL Database (AzureSQLDB)
@@ -245,7 +245,7 @@ Currently, the following **data sources** are supported in this script:
 
 This script can help you to automatically:
 
-**Azure Blob Storage (BlobStorge):**
+**Azure Blob Storage (BlobStorage):**
 
 - RBAC: Verify and assign Azure RBAC 'Reader' role to Azure Purview MSI on selected scope.
 - RBAC: Verify and assign Azure RBAC 'Storage Blob Data Reader role' to Azure Purview MSI in each of the subscriptions below selected scope.
