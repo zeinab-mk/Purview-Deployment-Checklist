@@ -47,5 +47,4 @@ Use the following guide to prepare your environment and deploy Azure Purview:
 |31     |Consent "**Extend labeling to assets in Azure Purview**"         |Compliance Administrator <br> Azure Information Protection Administrator          |Use this step if you are interested in extending Sensitivity Labels from M365 to Azure Purview. <br> Use this step if you are interested in extending **Sensitivity Labels** from M365 to Azure Purview         |
 |32     |Create new collections and assign roles in Azure Purview         |Collection admin         |         |
 |33     |Register and scan Data Sources in Azure Purview          |Data Source admin         |         |
-|34     |Scan Data Sources in Azure Purview          |Purview Data Source Administrator + Purview Data Reader or Curator         |It is recommended to setup automatic scanning rules         |
-|35     |         |         |         |
+
