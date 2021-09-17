@@ -2,11 +2,11 @@
 title: Azure Purview Deployment Prerequisites
 description: Azure Purview Deployment Prerequisites
 author: Zeinab Mokhtarian Koorabbasloo
-date: 05/12/2021
+date: 09/17/2021
 file: Azure-Purview-Deployment-Prerequisites.md
 ---
 
-| Update: 05/12/2021
+| Update: 09/17/2021
 
 ---
 
@@ -22,7 +22,7 @@ Use the following guide to prepare your environment and deploy Azure Purview:
 |6     |Data sources connected through Private Endpoint          |Network Contributor and data source owner to configure Private endpoint for each data source         |Use this step if you are planning to use **Private Endpoint for Ingestion**. <br> Note: To enable connectivity between Azure Purview and data sources, Azure data sources must be connected through Azure Private Link. <br> Other Azure data resources without Private Endpoint and on-prem resources can still be connected to Azure Purview.         |
 |7     |New or existing Azure Private DNS Zones.         |Required DNS Zones can be created automatically during Purview Account deployment using Subscription Owner / Contributor role         |Use this step if you are planning to use Private Endpoint connectivity with Azure Purview. Required DNS Zones for Private Endpoint: <ul><li>privatelink.purview.azure.com</li><li>privatelink.blob.core.windows.net</li><li>privatelink.queue.core.windows.net</li><li>privatelink.servicebus.windows.net</li></ul>        |
 |8     |A jump machine in your CorpNet or inside Azure VNet to launch Azure Purview Studio.         |N/A         |Use this step if you are planning to set **Allow Public Network** to **deny** on you Azure Purview Account.         |
-|9     |Deploy an Azure Purview Account         |Subscription Owner / Contributor         |4 capacity unit: dev/test <br> 16 capacity unit: prod <br> Note: 1 capacity unit = 1 API/sec         |
+|9     |Deploy an Azure Purview Account         |Subscription Owner / Contributor         |Purview account is deployed with 1cu         |
 |10     |Identify VMs where Self-hosted integration runtime will be deployed.         |Azure: VM Contributor <br> On-prem: Local Administrator         |Use this step if you are planning to use Self-hosted Integration Runtime instead of Azure default runtime. <br> <br> **Mandatory**: when using Private Endpoint, and/or using Key Vault or Service Principal as authentication method.          |
 |11     |Create Self-hosted integration runtime in Azure Purview. <br> [download](https://www.microsoft.com/en-us/download/details.aspx?id=39717) and deploy self-hosted IRs inside your data source networks          |Azure Purview Data Curator <br> VM Administrator         |Use this step if you are planning to use Self-hosted Integration Runtime instead of Azure default runtime. <br><br> **Mandatory**: when using Private Endpoint, and/or using Key Vault or Service Principal as authentication method.         |
 |12     |Grant Azure RBAC **Reader** role to **Azure Purview MSI** at data sources MG or Subscriptions         |Subscription / MG owner / User Access Administrator         |Use this step if you are planning to register **multiple** or **any** of the following data sources: <ul><li>Azure Blob Storage</li><li>Azure Data Lake Storage Gen1</li><li>Azure Data Lake Storage Gen2</li><li>Azure SQL Database</li><li>Azure SQL Database Managed Instance</li><li>Azure Synapse Analytics</li></ul>         |
