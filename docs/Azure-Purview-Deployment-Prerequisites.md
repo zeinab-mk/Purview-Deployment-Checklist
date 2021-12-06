@@ -6,7 +6,7 @@ date: 09/17/2021
 file: Azure-Purview-Deployment-Prerequisites.md
 ---
 
-| Update: 09/17/2021
+| Update: 12/05/2021
 
 ---
 
